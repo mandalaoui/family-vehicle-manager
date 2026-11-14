@@ -1,4 +1,7 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { RefreshMinistryButton } from "@/components/vehicles/RefreshMinistryButton";
+import { LastTestInfo } from "@/components/vehicles/LastTestInfo";
 import { ClipboardList, FileCheck, Gauge, StickyNote, Wrench } from "lucide-react";
 import { vehicleName } from "@/components/vehicles/VehicleCard";
 import { ServiceHistory } from "@/components/vehicles/ServiceHistory";
@@ -131,11 +134,20 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
           )}
         </Section>
 
-        <Section icon={FileCheck} title="רישוי, טסט וביטוח">
+        <Section icon={FileCheck} title="רישוי, טסט וביטוח" action={<RefreshMinistryButton vehicleId={v.id} />}>
           <div className="divide-y divide-silver-200">
-            <DueRow label="תוקף רישוי" due={v.license_due} today={today} />
-            <DueRow label="תוקף טסט" due={v.test_due} today={today} />
+            {v.test_due && v.test_due === v.license_due ? (
+              <DueRow label="תוקף טסט ורישוי" due={v.test_due} today={today} />
+            ) : (
+              <>
+                <DueRow label="תוקף רישוי" due={v.license_due} today={today} />
+                <DueRow label="תוקף טסט" due={v.test_due} today={today} />
+              </>
+            )}
             <DueRow label="תוקף ביטוח" due={v.insurance_due} today={today} />
+            <Suspense fallback={null}>
+              <LastTestInfo plate={v.plate} />
+            </Suspense>
           </div>
         </Section>
 

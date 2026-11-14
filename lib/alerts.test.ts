@@ -23,6 +23,22 @@ describe("dateLevel", () => {
   });
 });
 
+describe("merged test + license alert", () => {
+  it("shows one alert when both dates are equal", () => {
+    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-11-20" }, today);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ kind: "test_license", title: "טסט וחידוש רישיון", level: "urgent" });
+  });
+  it("keeps two alerts when the dates differ", () => {
+    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-12-20" }, today);
+    expect(alerts.map((a) => a.kind).sort()).toEqual(["license", "test"]);
+  });
+  it("keeps insurance separate from the merged alert", () => {
+    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-11-20", insurance_due: "2026-11-20" }, today);
+    expect(alerts.map((a) => a.kind).sort()).toEqual(["insurance", "test_license"]);
+  });
+});
+
 describe("serviceLevel", () => {
   it("uses km thresholds", () => {
     expect(serviceLevel(0)).toBe("overdue");

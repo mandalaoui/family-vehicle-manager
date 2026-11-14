@@ -1,14 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Check, Info, LoaderCircle, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button, LinkButton } from "@/components/ui/Button";
 import { DateInput, Field, NumberInput, SelectInput, TextArea, TextInput } from "@/components/ui/Field";
+import { Notice } from "@/components/ui/Layout";
 import { useToast } from "@/components/ui/Toast";
 import { createVehicle, updateVehicle } from "@/lib/actions/vehicles";
-import { COLORS, formatDate, FUEL_LABELS, KM } from "@/lib/format";
+import { COLORS, digitsOnly, formatDate, FUEL_LABELS, KM } from "@/lib/format";
+import type { MinistryVehicle } from "@/lib/ministry-map";
 import type { Vehicle } from "@/types/database";
+
+type Lookup =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "found"; lastTest: string | null }
+  | { state: "not_found" | "unavailable"; message: string };
 
 const dateValue = (iso: string | null | undefined) => (iso ? formatDate(iso) : "");
 
@@ -36,7 +44,62 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
   const [f, setF] = useState(() => initialState(vehicle));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pending, startTransition] = useTransition();
+  const [lookup, setLookup] = useState<Lookup>({ state: "idle" });
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const seq = useRef(0);
   const editing = Boolean(vehicle);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // Prefill from the Ministry of Transport. Every field stays editable afterwards.
+  function apply(m: MinistryVehicle) {
+    setF((p) => ({
+      ...p,
+      make: m.make || p.make,
+      model: m.model || p.model,
+      year: m.year ? String(m.year) : p.year,
+      color: m.color ?? p.color,
+      fuel_type: m.fuel_type ?? p.fuel_type,
+      test_due: m.valid_until ? formatDate(m.valid_until) : p.test_due,
+      license_due: m.valid_until ? formatDate(m.valid_until) : p.license_due,
+    }));
+  }
+
+  async function runLookup(digits: string) {
+    const mine = ++seq.current;
+    setLookup({ state: "loading" });
+    try {
+      const res = await fetch(`/api/plate/${digits}`, { signal: AbortSignal.timeout(15000) });
+      const body = (await res.json()) as { ok: boolean; code?: string; error?: string; vehicle?: MinistryVehicle };
+      if (mine !== seq.current) return;
+      if (body.ok && body.vehicle) {
+        apply(body.vehicle);
+        setLookup({ state: "found", lastTest: body.vehicle.last_test });
+      } else {
+        setLookup({
+          state: body.code === "not_found" ? "not_found" : "unavailable",
+          message: body.error ?? "לא הצלחנו לשלוף את הפרטים. אפשר להזין ידנית.",
+        });
+      }
+    } catch {
+      if (mine === seq.current) {
+        setLookup({ state: "unavailable", message: "שירות משרד התחבורה לא זמין או איטי כרגע. אפשר להזין את הפרטים ידנית." });
+      }
+    }
+  }
+
+  function onPlate(value: string) {
+    const clean = value.replace(/[^\d-]/g, "");
+    set("plate", clean);
+    clearTimeout(timer.current);
+    seq.current++;
+    const digits = digitsOnly(clean);
+    if (editing || digits.length < 7 || digits.length > 8) {
+      setLookup({ state: "idle" });
+      return;
+    }
+    timer.current = setTimeout(() => runLookup(digits), 600);
+  }
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
   const cancelHref = vehicle ? `/vehicles/${vehicle.id}` : "/";
 
@@ -63,11 +126,28 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
         <h2 className="mb-4 text-base font-bold">פרטי הרכב</h2>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="plate" label="מספר רכב" error={errors.plate} hint="7 או 8 ספרות, בלי רווחים">
-            <TextInput id="plate" ltr inputMode="numeric" autoComplete="off" placeholder="לדוגמה 1234567" maxLength={10} value={f.plate} error={errors.plate} onChange={(e) => set("plate", e.target.value.replace(/[^\d-]/g, ""))} />
+            <TextInput id="plate" ltr inputMode="numeric" autoComplete="off" placeholder="לדוגמה 1234567" maxLength={10} value={f.plate} error={errors.plate} onChange={(e) => onPlate(e.target.value)} />
           </Field>
           <Field id="nickname" label="כינוי" error={errors.nickname} hint="אפשר להשאיר ריק">
             <TextInput id="nickname" value={f.nickname} error={errors.nickname} maxLength={60} placeholder="למשל: הקורולה של אבא" onChange={(e) => set("nickname", e.target.value)} />
           </Field>
+          {lookup.state !== "idle" ? (
+            <div className="sm:col-span-2" aria-live="polite">
+              {lookup.state === "loading" ? (
+                <Notice icon={LoaderCircle}>מחפשים את הרכב במאגר משרד התחבורה…</Notice>
+              ) : lookup.state === "found" ? (
+                <Notice tone="success" icon={ShieldCheck}>
+                  נמשך ממאגר משרד התחבורה. אפשר לערוך כל שדה לפני השמירה.
+                  {lookup.lastTest ? ` טסט אחרון: ${formatDate(lookup.lastTest)}.` : ""}
+                </Notice>
+              ) : (
+                <Notice tone="warn" icon={lookup.state === "not_found" ? Info : TriangleAlert}>
+                  {lookup.message}
+                  {lookup.state === "not_found" ? ". אפשר להמשיך ולהזין את הפרטים ידנית." : ""}
+                </Notice>
+              )}
+            </div>
+          ) : null}
           <Field id="make" label="יצרן" error={errors.make}>
             <TextInput id="make" value={f.make} error={errors.make} maxLength={40} onChange={(e) => set("make", e.target.value)} />
           </Field>
@@ -92,7 +172,7 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
       <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="mb-4 text-base font-bold">תאריכים וטיפול</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="test_due" label="תוקף טסט" error={errors.test_due} hint="אפשר להשאיר ריק">
+          <Field id="test_due" label="תוקף טסט" error={errors.test_due} hint="במאגר משרד התחבורה זה תוקף הרישוי השנתי. אפשר להשאיר ריק.">
             <DateInput id="test_due" value={f.test_due} error={errors.test_due} onChange={(v) => set("test_due", v)} />
           </Field>
           <Field id="license_due" label="תוקף רישוי" error={errors.license_due} hint="אפשר להשאיר ריק">

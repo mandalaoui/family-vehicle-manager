@@ -39,3 +39,6 @@ export function dbErrorMessage(error: DbErrorLike | null | undefined, context = 
   console.error(`[${context}]`, { code: error?.code, message });
   return GENERIC_ERROR;
 }
+
+export const MINISTRY_NOT_FOUND = "לא נמצא רכב עם מספר זה";
+export const MINISTRY_UNAVAILABLE = "שירות משרד התחבורה לא זמין או איטי כרגע. אפשר להזין את הפרטים ידנית.";

@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { dbErrorMessage } from "@/lib/errors";
+import { dbErrorMessage, MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/errors";
+import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { formatNumber, KM, todayInIsrael } from "@/lib/format";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { dueFieldSchema, mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/lib/validation";
@@ -136,4 +137,32 @@ export async function undoRenewDue(id: string, field: string): Promise<ActionRes
   if (error) return fail(dbErrorMessage(error, "undo_renew_due"));
   revalidateVehicle(vid.data);
   return { ok: true, restoredTo: data };
+}
+
+/** Updates test + license dates from the Ministry of Transport (tokef_dt), bypassing the 1-day cache. */
+export async function refreshFromMinistry(id: string): Promise<ActionResult<{ validUntil: string }>> {
+  const s = await requireSession();
+  if (!isSession(s)) return fail(s.error);
+  const vid = uuidSchema.safeParse(id);
+  if (!vid.success) return fail(BAD_REQUEST);
+
+  const { data: vehicle, error: readError } = await s.supabase.from("vehicles").select("plate").eq("id", vid.data).maybeSingle();
+  if (readError) return fail(dbErrorMessage(readError, "refresh_read"));
+  if (!vehicle) return fail(NOT_FOUND);
+
+  const result = await fetchMinistryVehicle(vehicle.plate, { fresh: true });
+  if (result.status === "not_found") return fail(MINISTRY_NOT_FOUND);
+  if (result.status === "unavailable") return fail(MINISTRY_UNAVAILABLE);
+  const validUntil = result.vehicle.valid_until;
+  if (!validUntil) return fail("משרד התחבורה לא החזיר תאריך תוקף לרכב הזה.");
+
+  const { data, error } = await s.supabase
+    .from("vehicles")
+    .update({ test_due: validUntil, license_due: validUntil })
+    .eq("id", vid.data)
+    .select("id");
+  if (error) return fail(dbErrorMessage(error, "refresh_update"));
+  if (!data?.length) return fail(FORBIDDEN);
+  revalidateVehicle(vid.data);
+  return { ok: true, validUntil };
 }
