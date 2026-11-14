@@ -16,19 +16,25 @@ export default async function SettingsPage() {
   const isAdmin = role === "admin";
   const supabase = await createClient();
 
-  const { data: memberRows } = await supabase
-    .from("family_members")
-    .select("user_id, role, created_at")
-    .eq("family_id", familyId)
-    .order("created_at", { ascending: true });
-  const ids = (memberRows ?? []).map((m) => m.user_id);
-  const { data: profiles } = ids.length
-    ? await supabase.from("profiles").select("id, full_name, email").in("id", ids)
-    : { data: [] };
-  const byId = new Map((profiles ?? []).map((p) => [p.id, p]));
+  // Members (with their profiles embedded) and, for admins, the invitations: one parallel round trip.
+  const [{ data: memberRows }, invitesResult] = await Promise.all([
+    supabase
+      .from("family_members")
+      .select("user_id, role, created_at, profiles(id, full_name, email)")
+      .eq("family_id", familyId)
+      .order("created_at", { ascending: true }),
+    isAdmin
+      ? supabase
+          .from("invitations")
+          .select("id, email, role, token, status, expires_at")
+          .eq("family_id", familyId)
+          .in("status", ["pending", "expired"])
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: null }),
+  ]);
 
   const members: MemberView[] = (memberRows ?? []).map((m) => {
-    const p = byId.get(m.user_id);
+    const p = m.profiles;
     return {
       userId: m.user_id,
       name: p?.full_name?.trim() || p?.email || "חבר משפחה",
@@ -38,23 +44,14 @@ export default async function SettingsPage() {
     };
   });
 
-  let invites: InviteView[] = [];
-  if (isAdmin) {
-    const { data } = await supabase
-      .from("invitations")
-      .select("id, email, role, token, status, expires_at")
-      .eq("family_id", familyId)
-      .in("status", ["pending", "expired"])
-      .order("created_at", { ascending: false });
-    invites = (data ?? []).map((i) => ({
-      id: i.id,
-      email: i.email,
-      role: i.role,
-      token: i.token,
-      status: inviteDisplayStatus(i.status, i.expires_at),
-      expiresAt: i.expires_at,
-    }));
-  }
+  const invites: InviteView[] = (invitesResult.data ?? []).map((i) => ({
+    id: i.id,
+    email: i.email,
+    role: i.role,
+    token: i.token,
+    status: inviteDisplayStatus(i.status, i.expires_at),
+    expiresAt: i.expires_at,
+  }));
 
   return (
     <>

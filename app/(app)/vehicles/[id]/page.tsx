@@ -52,14 +52,14 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   if (!uuidSchema.safeParse(id).success) notFound();
 
-  const ctx = await requireMembership();
-  const isAdmin = ctx.membership.role === "admin";
   const supabase = await createClient();
 
-  const [{ data: v }, { data: logs }] = await Promise.all([
+  const [ctx, { data: v }, { data: logs }] = await Promise.all([
+    requireMembership(),
     supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
     supabase.from("service_logs").select("*").eq("vehicle_id", id).order("service_date", { ascending: false }).order("mileage", { ascending: false }),
   ]);
+  const isAdmin = ctx.membership.role === "admin";
   if (!v) notFound();
 
   const photos = await signedPhotoUrls(supabase, [v.photo_path]);

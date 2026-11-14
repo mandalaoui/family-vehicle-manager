@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { dbErrorMessage } from "@/lib/errors";
 import { fail, isSession, NOT_SIGNED_IN, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
-import { getFamilyContext } from "@/lib/server/context";
+import { getVerifiedFamilyContext } from "@/lib/server/context";
 import { rateLimited } from "@/lib/server/rate-limit";
 import { emailSchema, familyNameSchema, roleSchema, tokenSchema, uuidSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
@@ -12,7 +12,7 @@ const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
 const ALREADY_IN_FAMILY = "החשבון הזה כבר חבר במשפחה. כדי להצטרף למשפחה אחרת, עזבו קודם את המשפחה הנוכחית בהגדרות.";
 
 export async function createFamily(name: string): Promise<ActionResult> {
-  const ctx = await getFamilyContext();
+  const ctx = await getVerifiedFamilyContext();
   if (!ctx) return fail(NOT_SIGNED_IN);
   if (ctx.membership) return fail("כבר יש לך משפחה בחשבון הזה.");
 
@@ -28,7 +28,7 @@ export async function createFamily(name: string): Promise<ActionResult> {
 }
 
 export async function acceptInvitation(token: string): Promise<ActionResult> {
-  const ctx = await getFamilyContext();
+  const ctx = await getVerifiedFamilyContext();
   if (!ctx) return fail(NOT_SIGNED_IN);
   // One family per user in the app UX: a second membership would be invisible to the user.
   if (ctx.membership) return fail(ALREADY_IN_FAMILY);

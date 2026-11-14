@@ -1,5 +1,5 @@
 import type { ZodError } from "zod";
-import { getFamilyContext } from "./context";
+import { getVerifiedFamilyContext } from "./context";
 import { createClient } from "@/utils/supabase/server";
 import type { Role } from "@/types/database";
 
@@ -36,7 +36,7 @@ export interface Session {
  * Nothing about the family or role is ever read from the client.
  */
 export async function requireSession(): Promise<Session | { error: string }> {
-  const ctx = await getFamilyContext();
+  const ctx = await getVerifiedFamilyContext();
   if (!ctx) return { error: NOT_SIGNED_IN };
   if (!ctx.membership) return { error: NO_FAMILY };
   const supabase = await createClient();

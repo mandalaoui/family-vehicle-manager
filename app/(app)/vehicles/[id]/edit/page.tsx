@@ -14,10 +14,12 @@ export default async function EditVehiclePage({ params }: { params: Promise<{ id
   if (!uuidSchema.safeParse(id).success) notFound();
 
   const supabase = await createClient();
-  const { data: vehicle } = await supabase.from("vehicles").select("*").eq("id", id).maybeSingle();
+  const [{ data: vehicle }, ctx, { count: logCount }] = await Promise.all([
+    supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
+    requireMembership(),
+    supabase.from("service_logs").select("id", { count: "exact", head: true }).eq("vehicle_id", id),
+  ]);
   if (!vehicle) notFound();
-  const ctx = await requireMembership();
-  const { count: logCount } = await supabase.from("service_logs").select("id", { count: "exact", head: true }).eq("vehicle_id", vehicle.id);
   const photos = await signedPhotoUrls(supabase, [vehicle.photo_path]);
 
   return (
