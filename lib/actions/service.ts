@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateVehicle } from "@/lib/server/revalidate";
 import { z } from "zod";
 import { dbErrorMessage } from "@/lib/errors";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
@@ -8,12 +8,6 @@ import type { DeletedServiceLog } from "@/types/database";
 import { serviceLogSchema, uuidSchema, type ServiceLogInput } from "@/lib/validation";
 
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
-
-function revalidateVehicle(vehicleId: string) {
-  revalidatePath("/");
-  revalidatePath("/vehicles");
-  revalidatePath(`/vehicles/${vehicleId}`);
-}
 
 /** "Service done": one transaction in the database (complete_service RPC, SECURITY INVOKER). */
 export async function completeService(

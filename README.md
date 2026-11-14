@@ -82,8 +82,10 @@ npm run dev
 | `npm run build` / `npm start` | בנייה והרצה של גרסת פרודקשן |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | בדיקת טיפוסים |
-| `npm test` | בדיקות Vitest (התראות, תאריכים, ניקוי `next=`) |
-| `npm run check` | כל האמור לעיל ברצף |
+| `npm test` | בדיקות Vitest: התראות, תאריכים, סכמות zod, רכיבים (תרשים הצמיגים, טפסים, חלונות), נגישות (axe) ותשתית התזכורות |
+| `npm run test:sql` | בדיקות RLS ומיגרציות על Postgres מקומי בתוך התהליך (PGlite, בלי התקנה) |
+| `node scripts/route-js-size.mjs` | גודל ה־JS ללקוח לכל מסלול, אחרי `npm run build` |
+| `npm run check` | typecheck, ‏lint, ‏Vitest, בדיקות ה־SQL ו־build ברצף. אותו הדבר רץ ב־CI |
 
 ### בדיקות SQL מקומיות (RLS)
 
@@ -122,6 +124,7 @@ psql -d scratch -v ON_ERROR_STOP=1 \
 - **מוסכים:** רשימה משפחתית (שם, טלפון, כתובת, הערות) עם קישורי חיוג, Waze ו־Google Maps (בלי API בתשלום). חברים מוסיפים ועורכים, מנהל מוחק. אפשר לקשר טיפול למוסך.
 - **ביצועים:** בדיקת ה־JWT בעמודים נעשית מקומית (`getClaims`), בלי קריאה לשרת ה־Auth. ה־proxy ופעולות כתיבה ממשיכים להשתמש ב־`getUser()`. חברות ומשפחה נשלפות בשאילתה אחת, ושאילתות העמודים רצות במקביל. עם `DEBUG_TIMING=1` בשרת, כל קריאה ל־Supabase נרשמת בלוג (שיטה, נתיב וזמן בלבד).
 - רשימת בדיקות בטלפון: `docs/phone-test-checklist.md`.
+- תפעול (אזורים, משתני סביבה, מדידת ביצועים, תקלות): `docs/runbook.md`. תזכורות באימייל (כבויות): `docs/reminders.md`. יומן שינויים: `CHANGELOG.md`.
 
 ## החלטות מוצר עיקריות
 

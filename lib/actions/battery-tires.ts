@@ -1,18 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateVehicle } from "@/lib/server/revalidate";
 import { dbErrorMessage } from "@/lib/errors";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { batterySchema, tiresSchema, uuidSchema, type BatteryInput, type TiresInput } from "@/lib/validation";
 
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
 const NOT_FOUND = "הרכב לא נמצא. ייתכן שהוא נמחק.";
-
-function revalidate(vehicleId: string) {
-  revalidatePath("/");
-  revalidatePath("/vehicles");
-  revalidatePath(`/vehicles/${vehicleId}`);
-}
 
 /** Quick edit of the battery card. Any family member (RLS: members update vehicles). */
 export async function updateBattery(vehicleId: string, input: BatteryInput): Promise<ActionResult> {
@@ -26,7 +20,7 @@ export async function updateBattery(vehicleId: string, input: BatteryInput): Pro
   const { data, error } = await s.supabase.from("vehicles").update(parsed.data).eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) return fail(dbErrorMessage(error, "update_battery"));
   if (!data?.length) return fail(NOT_FOUND);
-  revalidate(vid.data);
+  revalidateVehicle(vid.data);
   return { ok: true };
 }
 
@@ -50,6 +44,6 @@ export async function updateTires(vehicleId: string, input: TiresInput): Promise
   const { data, error } = await s.supabase.from("vehicles").update(parsed.data).eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) return fail(dbErrorMessage(error, "update_tires"));
   if (!data?.length) return fail(NOT_FOUND);
-  revalidate(vid.data);
+  revalidateVehicle(vid.data);
   return { ok: true };
 }

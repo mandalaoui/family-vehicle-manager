@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateVehicle } from "@/lib/server/revalidate";
 import { dbErrorMessage, MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/errors";
 import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { rateLimited } from "@/lib/server/rate-limit";
@@ -12,12 +12,6 @@ import { mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/l
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
 const NOT_FOUND = "הרכב לא נמצא. ייתכן שהוא נמחק.";
-
-function revalidateVehicle(id?: string) {
-  revalidatePath("/");
-  revalidatePath("/vehicles");
-  if (id) revalidatePath(`/vehicles/${id}`);
-}
 
 export async function createVehicle(input: VehicleInput): Promise<ActionResult<{ id: string; warning?: string }>> {
   const s = await requireSession();
