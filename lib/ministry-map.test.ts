@@ -38,6 +38,22 @@ describe("helpers", () => {
   it("strips a trailing country", () => {
     expect(cleanMake("יונדאי קוריאה")).toBe("יונדאי");
     expect(cleanMake("קיה")).toBe("קיה");
+    expect(cleanMake("פורשה גרמניה")).toBe("פורשה");
+    expect(cleanMake("טויוטה יפן")).toBe("טויוטה");
+    expect(cleanMake('פורד ארה"ב')).toBe("פורד");
+    expect(cleanMake("סקודה צ'כיה")).toBe("סקודה");
+  });
+  it("strips trailing abbreviations", () => {
+    expect(cleanMake("קיה ד.")).toBe("קיה");
+    expect(cleanMake("יונדאי ק.")).toBe("יונדאי");
+    expect(cleanMake("מאזדה י.")).toBe("מאזדה");
+    expect(cleanMake("קיה ד. ")).toBe("קיה");
+    expect(cleanMake("רנו צרפת ד.")).toBe("רנו");
+  });
+  it("never empties the name and keeps multi-word makes", () => {
+    expect(cleanMake("ד.")).toBe("ד.");
+    expect(cleanMake("לנד רובר בריטניה")).toBe("לנד רובר");
+    expect(cleanMake("ב מ וו")).toBe("ב מ וו");
   });
   it("maps colors and fuels", () => {
     expect(mapColor("לבן פנינה")).toBe("לבן");

@@ -33,9 +33,17 @@ const COUNTRY_SUFFIXES = new Set([
   "צ'כיה", "סלובניה", "דרום", "אפריקה", "רוסיה", "אוקראינה", "מלזיה", "אינדונזיה", "ברזיל", "קנדה", "ישראל",
 ]);
 
+// A trailing abbreviation such as "ד." / "ק." (one Hebrew letter + dot, optionally with a geresh) is
+// a country/variant marker in the dataset ("קיה ד."), not part of the make.
+const ABBREVIATION = /^[א-ת]['׳]?\.$/;
+
 export function cleanMake(raw: string | null | undefined): string {
   const words = (raw ?? "").trim().split(/\s+/).filter(Boolean);
-  while (words.length > 1 && COUNTRY_SUFFIXES.has(words[words.length - 1])) words.pop();
+  while (words.length > 1) {
+    const last = words[words.length - 1];
+    if (COUNTRY_SUFFIXES.has(last) || ABBREVIATION.test(last)) words.pop();
+    else break;
+  }
   return words.join(" ");
 }
 
