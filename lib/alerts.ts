@@ -74,6 +74,33 @@ export function tireDates(v: Pick<AlertVehicle, "tires_replaced_at" | "tires_sep
   return dates.filter((d): d is string => Boolean(d));
 }
 
+export type WheelKey = "fr" | "fl" | "rr" | "rl";
+export const WHEEL_LABELS: Record<WheelKey, string> = { fr: "קדמי ימני", fl: "קדמי שמאלי", rr: "אחורי ימני", rl: "אחורי שמאלי" };
+export const WHEEL_ORDER: WheelKey[] = ["fl", "fr", "rl", "rr"];
+
+export interface WheelStatus {
+  /** Null when no date is known for this wheel. */
+  level: AlertLevel | null;
+  dueDate: string | null;
+}
+
+/**
+ * Status of one wheel: its own date + the reminder months, combined with the vehicle-wide km reminder
+ * (the worse of the two). Without a date the wheel is "not entered" (level null), never an alert.
+ */
+export function wheelStatus(
+  date: string | null | undefined,
+  v: { mileage: number; tires_replaced_km?: number | null; tires_reminder_months?: number; tires_reminder_km?: number },
+  today: string,
+): WheelStatus {
+  if (!date) return { level: null, dueDate: null };
+  const dueDate = addMonths(date, v.tires_reminder_months ?? DEFAULT_TIRES_MONTHS);
+  const dateLvl = dateLevel(daysBetween(today, dueDate));
+  const kmLeft = v.tires_replaced_km != null ? v.tires_replaced_km + (v.tires_reminder_km ?? DEFAULT_TIRES_KM) - v.mileage : null;
+  const kmLvl = kmLeft != null ? serviceLevel(kmLeft) : "ok";
+  return { level: LEVEL_RANK[kmLvl] <= LEVEL_RANK[dateLvl] ? kmLvl : dateLvl, dueDate };
+}
+
 /** Tires reminder: after N months or K km, whichever comes first (estimate). */
 export function tiresEstimate(
   v: Pick<AlertVehicle, "mileage" | "tires_replaced_at" | "tires_separate" | "tire_fl_at" | "tire_fr_at" | "tire_rl_at" | "tire_rr_at" | "tires_replaced_km" | "tires_reminder_months" | "tires_reminder_km">,
