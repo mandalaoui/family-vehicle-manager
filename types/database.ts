@@ -8,9 +8,25 @@ export interface DeletedServiceLog {
   service_date: string;
   mileage: number;
   garage: string | null;
+  garage_id: string | null;
   cost: number | null;
   notes: string | null;
 }
+export type BatteryTireFields = {
+  battery_replaced_at: string | null;
+  battery_warranty_until: string | null;
+  battery_notes: string | null;
+  battery_reminder_months: number;
+  tires_replaced_at: string | null;
+  tires_separate: boolean;
+  tire_fl_at: string | null;
+  tire_fr_at: string | null;
+  tire_rl_at: string | null;
+  tire_rr_at: string | null;
+  tires_replaced_km: number | null;
+  tires_reminder_months: number;
+  tires_reminder_km: number;
+};
 export type FuelType = "petrol" | "diesel" | "hybrid" | "plug_in" | "electric";
 
 export type Database = {
@@ -88,7 +104,7 @@ export type Database = {
           updated_at: string;
           photo_path: string | null;
           renewal_undo: RenewalUndoMap | null;
-        };
+        } & BatteryTireFields;
         Insert: {
           id?: string;
           family_id: string;
@@ -108,7 +124,7 @@ export type Database = {
           service_interval_km?: number;
           notes?: string | null;
           photo_path?: string | null;
-        };
+        } & Partial<BatteryTireFields>;
         Update: {
           plate?: string;
           nickname?: string | null;
@@ -126,7 +142,13 @@ export type Database = {
           service_interval_km?: number;
           notes?: string | null;
           photo_path?: string | null;
-        };
+        } & Partial<BatteryTireFields>;
+        Relationships: [];
+      };
+      garages: {
+        Row: { id: string; family_id: string; name: string; phone: string | null; address: string | null; notes: string | null; created_by: string | null; created_at: string };
+        Insert: { id?: string; family_id: string; name: string; phone?: string | null; address?: string | null; notes?: string | null; created_by?: string | null };
+        Update: { name?: string; phone?: string | null; address?: string | null; notes?: string | null };
         Relationships: [];
       };
       service_logs: {
@@ -136,6 +158,7 @@ export type Database = {
           service_date: string;
           mileage: number;
           garage: string | null;
+          garage_id: string | null;
           cost: number | null;
           notes: string | null;
           created_by: string | null;
@@ -147,6 +170,7 @@ export type Database = {
           service_date: string;
           mileage: number;
           garage?: string | null;
+          garage_id?: string | null;
           cost?: number | null;
           notes?: string | null;
           created_by?: string | null;
@@ -174,12 +198,12 @@ export type Database = {
       };
       recompute_next_service: { Args: { p_vehicle_id: string }; Returns: undefined };
       update_service_log: {
-        Args: { p_log_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null };
+        Args: { p_log_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null; p_garage_id?: string | null };
         Returns: string;
       };
       delete_service_log: { Args: { p_log_id: string }; Returns: DeletedServiceLog };
       restore_service_log: {
-        Args: { p_vehicle_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null };
+        Args: { p_vehicle_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null; p_garage_id?: string | null };
         Returns: string;
       };
       renew_due: { Args: { p_vehicle_id: string; p_field: string }; Returns: { previous: string | null; next: string } };
@@ -192,8 +216,13 @@ export type Database = {
           p_garage: string | null;
           p_cost: number | null;
           p_notes: string | null;
+          p_garage_id?: string | null;
         };
         Returns: string;
+      };
+      my_pending_invitations: {
+        Args: never;
+        Returns: { family_name: string; role: Role; token: string; expires_at: string }[];
       };
     };
     Enums: { [_ in never]: never };
@@ -202,5 +231,6 @@ export type Database = {
 };
 
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
+export type Garage = Database["public"]["Tables"]["garages"]["Row"];
 export type ServiceLog = Database["public"]["Tables"]["service_logs"]["Row"];
 export type Invitation = Database["public"]["Tables"]["invitations"]["Row"];

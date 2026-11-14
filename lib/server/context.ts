@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { Role } from "@/types/database";
 import { pickMembership } from "@/lib/membership";
@@ -39,3 +40,19 @@ export const getFamilyContext = cache(async (): Promise<FamilyContext | null> =>
 
   return { user, membership: { familyId: family.id, familyName: family.name, role: member.role } };
 });
+
+export interface MemberContext {
+  user: User;
+  membership: Membership;
+}
+
+/**
+ * For pages inside the app: the signed-in user with a family. Anyone else is redirected instead of
+ * crashing (no session -> /login, no family -> /onboarding), even if the layout guard runs in parallel.
+ */
+export async function requireMembership(): Promise<MemberContext> {
+  const ctx = await getFamilyContext();
+  if (!ctx) redirect("/login");
+  if (!ctx.membership) redirect("/onboarding");
+  return { user: ctx.user, membership: ctx.membership };
+}

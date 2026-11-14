@@ -7,7 +7,7 @@ import { Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
 import { actionableAlerts, compareAlerts, getVehicleAlerts, type AlertKind } from "@/lib/alerts";
 import { plural, todayInIsrael } from "@/lib/format";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { createClient } from "@/utils/supabase/server";
 
@@ -21,8 +21,8 @@ const ALERT_ICONS: Record<AlertKind, LucideIcon> = {
 };
 
 export default async function DashboardPage() {
-  const ctx = await getFamilyContext();
-  const membership = ctx!.membership!; // guaranteed by the (app) layout
+  const ctx = await requireMembership();
+  const membership = ctx.membership;
   const isAdmin = membership.role === "admin";
   const supabase = await createClient();
   const { data: vehicles } = await supabase.from("vehicles").select("*").eq("family_id", membership.familyId).order("created_at", { ascending: true });

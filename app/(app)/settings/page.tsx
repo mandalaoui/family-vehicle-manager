@@ -4,15 +4,15 @@ import { MembersList, type MemberView } from "@/components/settings/MembersList"
 import { RenameFamily } from "@/components/settings/RenameFamily";
 import { Notice, ScreenHeader, Section } from "@/components/ui/Layout";
 import { inviteDisplayStatus } from "@/lib/invites";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 import { createClient } from "@/utils/supabase/server";
 
 export const metadata = { title: "הגדרות משפחה · ניהול רכבי המשפחה" };
 
 export default async function SettingsPage() {
-  const ctx = await getFamilyContext();
-  const { familyId, familyName, role } = ctx!.membership!;
-  const userId = ctx!.user.id;
+  const ctx = await requireMembership();
+  const { familyId, familyName, role } = ctx.membership;
+  const userId = ctx.user.id;
   const isAdmin = role === "admin";
   const supabase = await createClient();
 

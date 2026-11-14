@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { dbErrorMessage } from "@/lib/errors";
 import { fail, isSession, NOT_SIGNED_IN, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { getFamilyContext } from "@/lib/server/context";
+import { rateLimited } from "@/lib/server/rate-limit";
 import { emailSchema, familyNameSchema, roleSchema, tokenSchema, uuidSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 
@@ -17,6 +18,7 @@ export async function createFamily(name: string): Promise<ActionResult> {
 
   const parsed = familyNameSchema.safeParse(name);
   if (!parsed.success) return fail(parsed.error.issues[0].message, { name: parsed.error.issues[0].message });
+  if (rateLimited(`create_family:${ctx.user.id}`, 3, 3_600_000)) return fail("יותר מדי ניסיונות ליצור משפחה. נסו שוב מאוחר יותר.");
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("create_family", { p_name: parsed.data });

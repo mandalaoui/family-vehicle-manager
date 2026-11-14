@@ -15,7 +15,7 @@ import { Ltr, Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
 import { describeDays, estimateService, isMileageStale, serviceLevel } from "@/lib/alerts";
 import { daysBetween, formatDate, formatNumber, FUEL_LABELS, KM, todayInIsrael } from "@/lib/format";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 import { uuidSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 import { dateLevel } from "@/lib/alerts";
@@ -52,8 +52,8 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   if (!uuidSchema.safeParse(id).success) notFound();
 
-  const ctx = await getFamilyContext();
-  const isAdmin = ctx!.membership!.role === "admin";
+  const ctx = await requireMembership();
+  const isAdmin = ctx.membership.role === "admin";
   const supabase = await createClient();
 
   const [{ data: v }, { data: logs }] = await Promise.all([
@@ -109,7 +109,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} compact alt={name} className="h-24 w-28 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-40" />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <p className="text-sm font-semibold">{photoUrl ? "תמונת הרכב" : "אין תמונה. מוצג איור לפי צבע הרכב"}</p>
-          <VehiclePhotoControl vehicleId={v.id} familyId={ctx!.membership!.familyId} hasPhoto={Boolean(photoUrl)} />
+          <VehiclePhotoControl vehicleId={v.id} familyId={ctx.membership.familyId} hasPhoto={Boolean(photoUrl)} />
         </div>
       </div>
 

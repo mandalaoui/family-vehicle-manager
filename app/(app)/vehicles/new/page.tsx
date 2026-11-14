@@ -2,14 +2,14 @@ import { Shield } from "lucide-react";
 import { VehicleForm } from "@/components/vehicles/VehicleForm";
 import { LinkButton } from "@/components/ui/Button";
 import { EmptyState, ScreenHeader } from "@/components/ui/Layout";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 
 export const metadata = { title: "הוספת רכב · ניהול רכבי המשפחה" };
 
 export default async function NewVehiclePage() {
-  const ctx = await getFamilyContext();
-  const isAdmin = ctx!.membership!.role === "admin";
-  const familyId = ctx!.membership!.familyId;
+  const ctx = await requireMembership();
+  const isAdmin = ctx.membership.role === "admin";
+  const familyId = ctx.membership.familyId;
 
   if (!isAdmin) {
     return (
