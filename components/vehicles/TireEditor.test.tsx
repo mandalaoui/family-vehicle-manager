@@ -40,7 +40,7 @@ describe("TireEditor: single date mode", () => {
 
   it("labels every wheel with its date and a status text, not color alone", () => {
     render(<Harness initial={single} />);
-    const label = wheel(/קדמי ימני/).getAttribute("aria-label")!;
+    const label = wheel(/קדמי ימני/).textContent!;
     expect(label).toContain("01/03/2035");
     expect(label).toContain("תקין");
   });
@@ -69,9 +69,9 @@ describe("TireEditor: separate dates mode", () => {
 
   it("shows a text status per wheel: overdue, ok and not entered", () => {
     render(<Harness initial={separate} />);
-    expect(wheel(/קדמי ימני/).getAttribute("aria-label")).toContain("באיחור");
-    expect(wheel(/קדמי שמאלי/).getAttribute("aria-label")).toContain("תקין");
-    expect(wheel(/אחורי ימני/).getAttribute("aria-label")).toContain("לא הוזן");
+    expect(wheel(/קדמי ימני/).textContent).toContain("באיחור");
+    expect(wheel(/קדמי שמאלי/).textContent).toContain("תקין");
+    expect(wheel(/אחורי ימני/).textContent).toContain("לא הוזן");
   });
 
   it("edits one wheel without touching the others", async () => {
