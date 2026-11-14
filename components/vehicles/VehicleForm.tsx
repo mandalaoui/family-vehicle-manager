@@ -86,6 +86,11 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
     setLookup({ state: "loading" });
     try {
       const res = await fetch(`/api/plate/${digits}`, { signal: AbortSignal.timeout(15000) });
+      if (res.redirected) {
+        // The session expired and the proxy redirected the request to /login.
+        if (mine === seq.current) setLookup({ state: "unavailable", message: "ההתחברות פגה. רעננו את הדף והתחברו שוב. אפשר גם להזין ידנית." });
+        return;
+      }
       const body = (await res.json()) as { ok: boolean; code?: string; error?: string; vehicle?: MinistryVehicle };
       if (mine !== seq.current) return;
       if (body.ok && body.vehicle) {
