@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 const tail = (id: string | undefined) => (id ? `…${id.slice(-6)}` : null);
 
 export async function GET() {
+  // Development only: in production this route does not exist.
+  if (process.env.NODE_ENV === "production") return new NextResponse(null, { status: 404 });
   const ctx = await getFamilyContext();
   if (!ctx) return NextResponse.json({ ok: false }, { status: 401, headers: { "Cache-Control": "no-store" } });
 
