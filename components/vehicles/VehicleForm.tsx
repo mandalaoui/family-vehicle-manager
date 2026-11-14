@@ -158,14 +158,13 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
       <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="mb-4 text-base font-bold">פרטי הרכב</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-3 sm:col-span-2">
-            <VehicleImage photoUrl={photo?.url ?? photoUrl} color={f.color || null} make={f.make || null} alt="תמונת הרכב" className="h-44 overflow-hidden rounded-xl" />
-            <PhotoPicker
-              onPick={pickPhoto}
-              onError={(m) => toast(m, { type: "error" })}
-              cameraLabel={photo || photoUrl ? "צילום חדש" : "צילום תמונה"}
-            />
-            <p className="text-xs text-muted">אפשר להוסיף תמונה, או להשאיר איור לפי צבע הרכב. התמונה מוקטנת לפני ההעלאה.</p>
+          <div className="flex items-center gap-3 sm:col-span-2">
+            <VehicleImage photoUrl={photo?.url ?? photoUrl} color={f.color || null} make={f.make || null} compact alt="תמונת הרכב" className="h-24 w-28 shrink-0 overflow-hidden rounded-xl" />
+            <div className="flex min-w-0 flex-col gap-2">
+              <p className="text-sm font-semibold">תמונה (אופציונלי)</p>
+              <PhotoPicker iconOnly onPick={pickPhoto} onError={(m) => toast(m, { type: "error" })} cameraLabel="צילום תמונה" />
+              <p className="text-xs text-muted">בלי תמונה מוצג איור לפי צבע הרכב.</p>
+            </div>
           </div>
           <Field id="plate" label="מספר רכב" error={errors.plate} hint="7 או 8 ספרות, בלי רווחים">
             <TextInput id="plate" ltr inputMode="numeric" autoComplete="off" placeholder="לדוגמה 1234567" maxLength={10} value={f.plate} error={errors.plate} onChange={(e) => onPlate(e.target.value)} />

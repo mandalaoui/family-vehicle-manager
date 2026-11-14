@@ -40,18 +40,17 @@ export function VehiclePhotoControl({ vehicleId, familyId, hasPhoto }: { vehicle
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-busy={uploading}>
+    <div className="flex items-center gap-2" aria-busy={uploading}>
       <PhotoPicker
+        iconOnly
         disabled={uploading || pending}
         onPick={onPick}
         onError={(m) => toast(m, { type: "error" })}
         cameraLabel={hasPhoto ? "צילום חדש" : "צילום"}
-        galleryLabel={uploading ? "מעלה…" : "בחירה מהגלריה"}
+        galleryLabel="בחירה מהגלריה"
       />
       {hasPhoto ? (
-        <Button variant="ghost" icon={Trash2} loading={pending} disabled={uploading} onClick={remove} className="text-red-700 hover:bg-red-50">
-          הסרת תמונה
-        </Button>
+        <Button variant="ghost" icon={Trash2} loading={pending} disabled={uploading} onClick={remove} aria-label="הסרת תמונה" title="הסרת תמונה" className="w-11 px-0 text-red-700 hover:bg-red-50" />
       ) : null}
     </div>
   );

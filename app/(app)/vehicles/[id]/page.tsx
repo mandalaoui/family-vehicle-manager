@@ -105,9 +105,12 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         }
       />
 
-      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-silver-300 bg-white p-3 shadow-sm sm:p-4">
-        <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} alt={name} className="h-48 overflow-hidden rounded-xl sm:h-56" />
-        <VehiclePhotoControl vehicleId={v.id} familyId={ctx!.membership!.familyId} hasPhoto={Boolean(photoUrl)} />
+      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-silver-300 bg-white p-3 shadow-sm">
+        <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} compact alt={name} className="h-24 w-28 shrink-0 overflow-hidden rounded-xl sm:h-28 sm:w-40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <p className="text-sm font-semibold">{photoUrl ? "תמונת הרכב" : "אין תמונה. מוצג איור לפי צבע הרכב"}</p>
+          <VehiclePhotoControl vehicleId={v.id} familyId={ctx!.membership!.familyId} hasPhoto={Boolean(photoUrl)} />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

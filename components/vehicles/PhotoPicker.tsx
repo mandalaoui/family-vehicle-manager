@@ -11,12 +11,15 @@ export function PhotoPicker({
   onPick,
   onError,
   disabled,
+  iconOnly = false,
   cameraLabel = "צילום",
   galleryLabel = "בחירה מהגלריה",
 }: {
   onPick: (photo: Blob) => void;
   onError: (message: string) => void;
   disabled?: boolean;
+  /** Small square icon buttons (label kept as aria-label/title). */
+  iconOnly?: boolean;
   cameraLabel?: string;
   galleryLabel?: string;
 }) {
@@ -39,14 +42,31 @@ export function PhotoPicker({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className={iconOnly ? "flex gap-2" : "flex flex-wrap gap-2"}>
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={handle} />
       <input ref={galleryRef} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden onChange={handle} />
-      <Button variant="secondary" icon={Camera} loading={busy} disabled={disabled} onClick={() => cameraRef.current?.click()}>
-        {cameraLabel}
+      <Button
+        variant="secondary"
+        icon={Camera}
+        loading={busy}
+        disabled={disabled}
+        onClick={() => cameraRef.current?.click()}
+        aria-label={iconOnly ? cameraLabel : undefined}
+        title={iconOnly ? cameraLabel : undefined}
+        className={iconOnly ? "w-11 px-0" : ""}
+      >
+        {iconOnly ? null : cameraLabel}
       </Button>
-      <Button variant="neutral" icon={ImageIcon} disabled={disabled || busy} onClick={() => galleryRef.current?.click()}>
-        {galleryLabel}
+      <Button
+        variant="neutral"
+        icon={ImageIcon}
+        disabled={disabled || busy}
+        onClick={() => galleryRef.current?.click()}
+        aria-label={iconOnly ? galleryLabel : undefined}
+        title={iconOnly ? galleryLabel : undefined}
+        className={iconOnly ? "w-11 px-0" : ""}
+      >
+        {iconOnly ? null : galleryLabel}
       </Button>
     </div>
   );

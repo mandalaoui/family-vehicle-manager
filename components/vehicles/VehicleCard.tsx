@@ -17,7 +17,7 @@ export function VehicleCard({ vehicle: v, today, photoUrl }: { vehicle: Vehicle;
       href={`/vehicles/${v.id}`}
       className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-silver-300 bg-white text-start shadow-sm transition-shadow hover:shadow-md"
     >
-      <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} alt={vehicleName(v)} className="h-36" />
+      <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} alt={vehicleName(v)} className="h-28" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
