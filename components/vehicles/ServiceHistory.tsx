@@ -18,12 +18,14 @@ export function ServiceHistory({
   currentMileage,
   today,
   logs,
+  familyGarages,
 }: {
   vehicleId: string;
   vehicleName: string;
   currentMileage: number;
   today: string;
   logs: ServiceLog[];
+  familyGarages: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -113,6 +115,7 @@ export function ServiceHistory({
           currentMileage={currentMileage}
           today={today}
           garages={garages}
+          familyGarages={familyGarages}
           log={editing}
           onClose={() => setEditing(null)}
         />

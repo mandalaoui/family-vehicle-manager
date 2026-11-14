@@ -140,15 +140,47 @@ const vehicleBase = z.object({
   last_service_date: dateOptionalNotFuture,
   last_service_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
   notes: optionalText(2000, "ההערות"),
+  // Battery
+  battery_replaced_at: dateOptionalNotFuture,
+  battery_warranty_until: dateOptional,
+  battery_notes: optionalText(1000, "הערות המצבר"),
+  battery_reminder_months: intField("הזינו כל כמה חודשים לבדוק מצבר", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
+    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
+  ),
+  // Tires
+  tires_separate: z.boolean(),
+  tires_replaced_at: dateOptionalNotFuture,
+  tire_fl_at: dateOptionalNotFuture,
+  tire_fr_at: dateOptionalNotFuture,
+  tire_rl_at: dateOptionalNotFuture,
+  tire_rr_at: dateOptionalNotFuture,
+  tires_replaced_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
+  tires_reminder_months: intField("הזינו כל כמה חודשים לבדוק צמיגים", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
+    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
+  ),
+  tires_reminder_km: intField("הזינו כל כמה ק״מ לבדוק צמיגים", 500_000, "המרווח גבוה מדי. בדקו את המספר").pipe(
+    z.number().min(1000, "המרווח צריך להיות לפחות 1,000 ק״מ"),
+  ),
 });
-export const vehicleSchema = vehicleBase.superRefine((v, ctx) => {
+function vehicleChecks(v: z.output<typeof vehicleBase>, ctx: z.RefinementCtx) {
   if ((v.last_service_date === null) !== (v.last_service_km === null)) {
     const path = v.last_service_date === null ? "last_service_date" : "last_service_km";
     ctx.addIssue({ code: "custom", path: [path], message: "מלאו גם תאריך וגם קילומטראז׳ של הטיפול האחרון, או השאירו את שניהם ריקים" });
   } else if (v.last_service_km !== null && v.last_service_km > v.mileage) {
     ctx.addIssue({ code: "custom", path: ["last_service_km"], message: "הטיפול האחרון לא יכול להיות בקילומטראז׳ גבוה מהקילומטראז׳ הנוכחי" });
   }
-});
+  if (v.tires_replaced_km !== null && v.tires_replaced_km > v.mileage) {
+    ctx.addIssue({ code: "custom", path: ["tires_replaced_km"], message: "הקילומטראז׳ בהחלפת הצמיגים לא יכול להיות גבוה מהקילומטראז׳ הנוכחי" });
+  }
+}
+
+function normalizeTires(v: z.output<typeof vehicleBase>) {
+  return v.tires_separate
+    ? { ...v, tires_replaced_at: null }
+    : { ...v, tire_fl_at: null, tire_fr_at: null, tire_rl_at: null, tire_rr_at: null };
+}
+// Only one of the two tire modes is stored: a single date, or one date per wheel.
+export const vehicleSchema = vehicleBase.superRefine(vehicleChecks).transform(normalizeTires);
 export type VehicleInput = z.input<typeof vehicleBase>;
 
 export const mileageSchema = z.object({
@@ -159,6 +191,12 @@ export const serviceLogSchema = z.object({
   service_date: dateRequiredNotFuture("הזינו את תאריך הטיפול"),
   mileage: intField("הזינו את הקילומטראז׳ בעת הטיפול", MAX_KM, "הקילומטראז׳ גבוה מדי. בדקו את המספר"),
   garage: optionalText(80, "שם המוסך"),
+  garage_id: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .pipe(z.string().uuid("המוסך שנבחר לא תקין").nullable()),
   cost: z
     .string()
     .trim()
@@ -200,3 +238,21 @@ export const tokenSchema = z
   .trim()
   .regex(/^[A-Za-z0-9_-]{16,128}$/, "קישור ההזמנה לא תקין.");
 
+
+export const garageSchema = z.object({
+  name: requiredText(80, "הזינו שם מוסך", "שם המוסך"),
+  phone: z
+    .string()
+    .trim()
+    .transform((v, ctx) => {
+      if (v === "") return null;
+      if (!/^[0-9+()*\s-]{3,30}$/.test(v)) {
+        ctx.addIssue({ code: "custom", message: "הזינו מספר טלפון תקין, למשל 03-1234567" });
+        return z.NEVER;
+      }
+      return v;
+    }),
+  address: optionalText(200, "הכתובת"),
+  notes: optionalText(1000, "ההערות"),
+});
+export type GarageInput = z.input<typeof garageSchema>;

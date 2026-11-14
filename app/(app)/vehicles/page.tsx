@@ -3,17 +3,17 @@ import { VehicleCard } from "@/components/vehicles/VehicleCard";
 import { LinkButton } from "@/components/ui/Button";
 import { EmptyState, ScreenHeader } from "@/components/ui/Layout";
 import { plural, todayInIsrael } from "@/lib/format";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { createClient } from "@/utils/supabase/server";
 
 export const metadata = { title: "כל הרכבים · ניהול רכבי המשפחה" };
 
 export default async function VehiclesPage() {
-  const ctx = await getFamilyContext();
-  const isAdmin = ctx!.membership!.role === "admin";
+  const ctx = await requireMembership();
+  const isAdmin = ctx.membership.role === "admin";
   const supabase = await createClient();
-  const { data } = await supabase.from("vehicles").select("*").order("created_at", { ascending: true });
+  const { data } = await supabase.from("vehicles").select("*").eq("family_id", ctx.membership.familyId).order("created_at", { ascending: true });
   const list = data ?? [];
   const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();

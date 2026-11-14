@@ -2,7 +2,7 @@ import { addMonths, daysBetween, formatDate, formatDays, formatNumber, KM, today
 
 // Pure, server-side friendly alert logic. `today` is an ISO date in Asia/Jerusalem.
 export type AlertLevel = "overdue" | "urgent" | "soon" | "ok";
-export type AlertKind = "license" | "insurance" | "service" | "mileage";
+export type AlertKind = "license" | "insurance" | "service" | "mileage" | "battery" | "tires";
 
 export const LEVEL_RANK: Record<AlertLevel, number> = { overdue: 0, urgent: 1, soon: 2, ok: 3 };
 export const LEVEL_LABEL: Record<AlertLevel, string> = {
@@ -27,6 +27,68 @@ export interface AlertVehicle {
   service_interval_km: number;
   /** ISO timestamp; the 12-month fallback for an estimate counts from here. */
   created_at: string;
+  battery_replaced_at?: string | null;
+  battery_reminder_months?: number;
+  tires_replaced_at?: string | null;
+  tires_separate?: boolean;
+  tire_fl_at?: string | null;
+  tire_fr_at?: string | null;
+  tire_rl_at?: string | null;
+  tire_rr_at?: string | null;
+  tires_replaced_km?: number | null;
+  tires_reminder_months?: number;
+  tires_reminder_km?: number;
+}
+
+export const DEFAULT_BATTERY_MONTHS = 36;
+export const DEFAULT_TIRES_MONTHS = 48;
+export const DEFAULT_TIRES_KM = 50_000;
+
+export interface BatteryEstimate {
+  dueDate: string;
+  daysLeft: number;
+  level: AlertLevel;
+}
+
+/** Battery reminder: N months after the replacement date (estimate). Null when no date is known. */
+export function batteryEstimate(v: Pick<AlertVehicle, "battery_replaced_at" | "battery_reminder_months">, today: string): BatteryEstimate | null {
+  if (!v.battery_replaced_at) return null;
+  const dueDate = addMonths(v.battery_replaced_at, v.battery_reminder_months ?? DEFAULT_BATTERY_MONTHS);
+  const daysLeft = daysBetween(today, dueDate);
+  return { dueDate, daysLeft, level: dateLevel(daysLeft) };
+}
+
+export interface TiresEstimate {
+  /** Oldest replacement date (with separate wheels: the oldest wheel). */
+  oldestDate: string;
+  dueDate: string;
+  daysLeft: number;
+  /** Null when the replacement mileage is unknown. */
+  dueKm: number | null;
+  kmLeft: number | null;
+  level: AlertLevel;
+}
+
+export function tireDates(v: Pick<AlertVehicle, "tires_replaced_at" | "tires_separate" | "tire_fl_at" | "tire_fr_at" | "tire_rl_at" | "tire_rr_at">): string[] {
+  const dates = v.tires_separate ? [v.tire_fl_at, v.tire_fr_at, v.tire_rl_at, v.tire_rr_at] : [v.tires_replaced_at];
+  return dates.filter((d): d is string => Boolean(d));
+}
+
+/** Tires reminder: after N months or K km, whichever comes first (estimate). */
+export function tiresEstimate(
+  v: Pick<AlertVehicle, "mileage" | "tires_replaced_at" | "tires_separate" | "tire_fl_at" | "tire_fr_at" | "tire_rl_at" | "tire_rr_at" | "tires_replaced_km" | "tires_reminder_months" | "tires_reminder_km">,
+  today: string,
+): TiresEstimate | null {
+  const dates = tireDates(v).sort();
+  if (dates.length === 0) return null;
+  const oldestDate = dates[0];
+  const dueDate = addMonths(oldestDate, v.tires_reminder_months ?? DEFAULT_TIRES_MONTHS);
+  const daysLeft = daysBetween(today, dueDate);
+  const dueKm = v.tires_replaced_km != null ? v.tires_replaced_km + (v.tires_reminder_km ?? DEFAULT_TIRES_KM) : null;
+  const kmLeft = dueKm != null ? dueKm - v.mileage : null;
+  const dateLvl = dateLevel(daysLeft);
+  const kmLvl = kmLeft != null ? serviceLevel(kmLeft) : "ok";
+  return { oldestDate, dueDate, daysLeft, dueKm, kmLeft, level: LEVEL_RANK[kmLvl] <= LEVEL_RANK[dateLvl] ? kmLvl : dateLvl };
 }
 
 export interface VehicleAlert {
@@ -131,6 +193,31 @@ export function getVehicleAlerts(v: AlertVehicle, today: string): VehicleAlert[]
       level: est.level,
       detail: `הערכה: בקילומטראז׳ ${formatNumber(est.nextKm)} (עוד ${formatNumber(est.kmLeft)} ${KM}) או עד ${formatDate(est.nextDate)}, המוקדם מביניהם`,
       sort: Math.min(est.kmLeft / 50, est.daysLeft),
+      estimated: true,
+    });
+  }
+
+  const battery = batteryEstimate(v, today);
+  if (battery) {
+    alerts.push({
+      kind: "battery",
+      title: "בדיקת מצבר (הערכה)",
+      level: battery.level,
+      detail: `הערכה: ${describeDays(battery.daysLeft)} · סביב ${formatDate(battery.dueDate)}`,
+      sort: battery.daysLeft,
+      estimated: true,
+    });
+  }
+
+  const tires = tiresEstimate(v, today);
+  if (tires) {
+    const kmPart = tires.kmLeft != null && tires.dueKm != null ? (tires.kmLeft > 0 ? ` או עוד ${formatNumber(tires.kmLeft)} ${KM}` : ` (חריגה של ${formatNumber(-tires.kmLeft)} ${KM})`) : "";
+    alerts.push({
+      kind: "tires",
+      title: "בדיקת צמיגים (הערכה)",
+      level: tires.level,
+      detail: `הערכה: ${describeDays(tires.daysLeft)} · סביב ${formatDate(tires.dueDate)}${kmPart}, המוקדם מביניהם`,
+      sort: Math.min(tires.daysLeft, tires.kmLeft != null ? tires.kmLeft / 50 : Infinity),
       estimated: true,
     });
   }

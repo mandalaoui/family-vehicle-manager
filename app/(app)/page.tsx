@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, CircleCheck, FileCheck, Gauge, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
+import { BatteryCharging, ChevronLeft, CircleCheck, CircleDot, FileCheck, Gauge, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
 import { VehicleCard, vehicleName } from "@/components/vehicles/VehicleCard";
 import { LinkButton } from "@/components/ui/Button";
 import { EmptyState, ScreenHeader } from "@/components/ui/Layout";
@@ -7,7 +7,7 @@ import { Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
 import { actionableAlerts, compareAlerts, getVehicleAlerts, type AlertKind } from "@/lib/alerts";
 import { plural, todayInIsrael } from "@/lib/format";
-import { getFamilyContext } from "@/lib/server/context";
+import { requireMembership } from "@/lib/server/context";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { createClient } from "@/utils/supabase/server";
 
@@ -18,14 +18,16 @@ const ALERT_ICONS: Record<AlertKind, LucideIcon> = {
   insurance: ShieldCheck,
   service: Wrench,
   mileage: Gauge,
+  battery: BatteryCharging,
+  tires: CircleDot,
 };
 
 export default async function DashboardPage() {
-  const ctx = await getFamilyContext();
-  const membership = ctx!.membership!; // guaranteed by the (app) layout
+  const ctx = await requireMembership();
+  const membership = ctx.membership;
   const isAdmin = membership.role === "admin";
   const supabase = await createClient();
-  const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: true });
+  const { data: vehicles } = await supabase.from("vehicles").select("*").eq("family_id", membership.familyId).order("created_at", { ascending: true });
   const list = vehicles ?? [];
   const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();

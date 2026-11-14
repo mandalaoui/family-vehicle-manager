@@ -36,6 +36,7 @@ export async function completeService(
     p_garage: d.garage,
     p_cost: d.cost,
     p_notes: d.notes,
+    p_garage_id: d.garage_id,
   });
   if (error) return fail(dbErrorMessage(error, "complete_service"));
 
@@ -62,6 +63,7 @@ export async function updateServiceLog(logId: string, input: ServiceLogInput): P
     p_garage: d.garage,
     p_cost: d.cost,
     p_notes: d.notes,
+    p_garage_id: d.garage_id,
   });
   if (error) return fail(dbErrorMessage(error, "update_service_log"));
   revalidateVehicle(vehicleId);
@@ -86,6 +88,7 @@ const restoreSchema = z.object({
   service_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   mileage: z.number().int().min(0).max(2_000_000),
   garage: z.string().max(80).nullable(),
+  garage_id: z.string().uuid().nullable().optional(),
   cost: z.number().min(0).max(9_999_999).nullable(),
   notes: z.string().max(2000).nullable(),
 });
@@ -105,6 +108,7 @@ export async function restoreServiceLog(log: DeletedServiceLog): Promise<ActionR
     p_garage: d.garage,
     p_cost: d.cost,
     p_notes: d.notes,
+    p_garage_id: d.garage_id,
   });
   if (error) return fail(dbErrorMessage(error, "restore_service_log"));
   revalidateVehicle(d.vehicle_id);

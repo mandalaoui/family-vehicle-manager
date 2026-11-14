@@ -108,7 +108,10 @@ select chk('B inserts log', public.run_as('bbbbbbbb-0000-0000-0000-000000000002'
 select chk('C cannot see logs', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from public.service_logs'), '0');
 create temp table veh_id as select id from public.vehicles limit 1; grant select on veh_id to authenticated;
 select chk('C cannot insert log', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.service_logs(vehicle_id,service_date,mileage) values ((select id from veh_id),current_date,1) $q$), 'new row violates row-level security policy for table "service_logs"');
-select chk('B creates 2nd family', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.create_family('Two') $q$), 'ok');
+select chk('B cannot create a 2nd family (single-family guard)', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.create_family('Two') $q$), 'already_in_family');
+-- Legacy data: simulate a user who already holds two memberships (created before the guard existed).
+insert into public.families(name, created_by) values ('Two', 'bbbbbbbb-0000-0000-0000-000000000002');
+insert into public.family_members(family_id, user_id, role) select id, 'bbbbbbbb-0000-0000-0000-000000000002', 'admin' from public.families where name='Two';
 select chk('cannot move vehicle across families', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ update public.vehicles set family_id=(select id from public.families where name='Two') $q$), 'forbidden');
 
 -- cascade delete of a family with its only admin (as superuser)
@@ -120,7 +123,7 @@ select chk('complete_service: member runs', public.run_as('bbbbbbbb-0000-0000-00
 select chk('complete_service: log inserted', (select count(*)::text from public.service_logs where vehicle_id=(select id from veh_id)), '2');
 select chk('complete_service: garage trimmed', (select garage from public.service_logs where mileage=20000), 'Garage');
 select chk('complete_service: mileage raised', (select mileage::text from public.vehicles where id=(select id from veh_id)), '20000');
-select chk('complete_service: mileage_updated_at', (select (mileage_updated_at = current_date)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('complete_service: mileage_updated_at', (select (mileage_updated_at = (now() at time zone 'Asia/Jerusalem')::date)::text from public.vehicles where id=(select id from veh_id)), 'true');
 select chk('complete_service: next_service_km = mileage + interval', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), '30000');
 select chk('complete_service: older/lower service keeps mileage', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.complete_service((select id from veh_id), current_date - 100, 5000, null, null, null) $q$), 'ok');
 select chk('complete_service: mileage not lowered', (select mileage::text from public.vehicles where id=(select id from veh_id)), '20000');
@@ -196,5 +199,29 @@ select chk('p2: A invites C', public.run_as('aaaaaaaa-0000-0000-0000-00000000000
 select chk('p2: existing member cannot accept', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok2))), 'already_in_family');
 select chk('p2: C adds vehicle', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.vehicles(family_id,plate,make,model) select id,'5551234','Kia','Niro' from public.families where name='Levi' $q$), 'ok');
 select chk('p2: complete_service still works', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.complete_service((select id from public.vehicles where plate='5551234'), current_date, 1000, null, null, null) $q$), 'ok');
+
+-- phase 2 features: garages, garage-linked logs, create_family guard, my_pending_invitations
+select chk('g: member adds garage', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ insert into public.garages(family_id,name,phone) select id,'Moshe Garage','03-1234567' from fam $q$), 'ok');
+select chk('g: bad phone rejected', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ insert into public.garages(family_id,name,phone) select id,'Bad','abc' from fam $q$), 'new row for relation "garages" violates check constraint "garages_phone_check"');
+select chk('g: duplicate name (case-insensitive) rejected', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ insert into public.garages(family_id,name) select id,' moshe garage ' from fam $q$), 'duplicate key value violates unique constraint "garages_family_name_key"');
+select chk('g: other family cannot see', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from public.garages'), '0');
+select chk('g: other family cannot insert', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.garages(family_id,name) select id,'Evil' from fam $q$), 'new row violates row-level security policy for table "garages"');
+select chk('g: anon blocked', public.cnt_as(null,null,'select * from public.garages'), 'permission denied for table garages');
+select chk('g: C adds garage in own family', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.garages(family_id,name) select id,'Levi Garage' from public.families where name='Levi' $q$), 'ok');
+select chk('g: cannot move garage to another family', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ update public.garages set family_id=(select id from fam) where name='Levi Garage' $q$), 'forbidden');
+select chk('g: complete_service links garage', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.complete_service((select id from public.vehicles where plate='5551234'), current_date, 2000, 'ignored', null, null, (select id from public.garages where name='Levi Garage')) $q$), 'ok');
+select chk('g: log carries garage name and id', (select (garage = 'Levi Garage' and garage_id is not null)::text from public.service_logs where mileage=2000), 'true');
+create temp table moshe_id as select id from public.garages where name='Moshe Garage';
+grant select on moshe_id to authenticated;
+select chk('g: foreign garage id rejected', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.complete_service((select id from public.vehicles where plate='5551234'), current_date, 2100, null, null, null, (select id from moshe_id)) $q$), 'forbidden');
+select chk('g: foreign garage rolled back (no log)', (select count(*)::text from public.service_logs where mileage=2100), '0');
+select chk('g: delete_service_log returns garage_id', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select (public.delete_service_log((select id from public.service_logs where mileage=2000)) ->> 'garage_id') is not null $q$), 'ok');
+select chk('g: admin deletes garage', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ delete from public.garages where name='Levi Garage' $q$), 'ok');
+select chk('g: garage gone', (select count(*)::text from public.garages where name='Levi Garage'), '0');
+select chk('g: non-admin cannot delete (0 rows)', (select count(*)::text from public.garages where name='Moshe Garage'), '1');
+select chk('p2: create_family refused when already member', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.create_family('Another') $q$), 'already_in_family');
+select chk('p2: pending invitations for invitee', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from public.my_pending_invitations()'), '1');
+select chk('p2: pending invitations hidden from others', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com','select * from public.my_pending_invitations()'), '0');
+select chk('p2: pending invitations anon blocked', public.cnt_as(null,null,'select * from public.my_pending_invitations()'), 'permission denied for function my_pending_invitations');
 
 select n, case when got is not distinct from want then 'PASS' else 'FAIL' end as r, name, got, want from public.zz_results order by n;
