@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-heebo), system-ui, "Segoe UI", Arial, sans-serif;
+  --color-ink: #111827;
+  --color-muted: #4b5563;
+  --color-brand: #1d4ed8;
+  --color-brand-dark: #1e40af;
+  --color-brand-50: #eff4ff;
+  --color-silver-50: #f5f6f8;
+  --color-silver-100: #e8eaed;
+  --color-silver-200: #dde0e5;
+  --color-silver-300: #c3c9d0;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: var(--color-silver-100);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toast-in {
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes pulse-soft {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton {
+  background: var(--color-silver-200);
+  border-radius: 0.75rem;
+  animation: pulse-soft 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
