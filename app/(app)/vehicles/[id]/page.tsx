@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { BatteryEdit } from "@/components/vehicles/BatteryEdit";
+import { TiresEdit } from "@/components/vehicles/TiresEdit";
 import { RefreshMinistryButton } from "@/components/vehicles/RefreshMinistryButton";
 import { VehicleImage } from "@/components/vehicles/VehicleImage";
 import { VehiclePhotoControl } from "@/components/vehicles/VehiclePhotoControl";
@@ -211,7 +213,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         </Section>
 
 
-        <Section icon={BatteryCharging} title="מצבר">
+        <Section icon={BatteryCharging} title="מצבר" action={<BatteryEdit vehicle={v} />}>
           {v.battery_replaced_at ? (
             <div className="divide-y divide-silver-200">
               <Row label="הוחלף ב־">
@@ -236,13 +238,11 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
               {v.battery_notes ? <p className="whitespace-pre-wrap break-words py-2 text-sm">{v.battery_notes}</p> : null}
             </div>
           ) : (
-            <Link href={`/vehicles/${v.id}/edit`} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-brand underline">
-              הוסיפו תאריך החלפת מצבר
-            </Link>
+            <p className="text-sm text-muted">עדיין לא הוזן תאריך החלפה. לחצו על ״עריכה״ כדי להוסיף.</p>
           )}
         </Section>
 
-        <Section icon={CircleDot} title="צמיגים">
+        <Section icon={CircleDot} title="צמיגים" action={<TiresEdit vehicle={v} />}>
           {tires ? (
             <div className="divide-y divide-silver-200">
               {v.tires_separate ? (
@@ -286,9 +286,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           ) : (
-            <Link href={`/vehicles/${v.id}/edit`} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-brand underline">
-              הוסיפו תאריך החלפת צמיגים
-            </Link>
+            <p className="text-sm text-muted">עדיין לא הוזן תאריך החלפה. לחצו על ״עריכה״ כדי להוסיף.</p>
           )}
         </Section>
 
