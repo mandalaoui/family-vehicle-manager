@@ -14,9 +14,7 @@ import { createClient } from "@/utils/supabase/server";
 export const metadata = { title: "רכבים · ניהול רכבי המשפחה" };
 
 const ALERT_ICONS: Record<AlertKind, LucideIcon> = {
-  test: FileCheck,
   license: FileCheck,
-  test_license: FileCheck,
   insurance: ShieldCheck,
   service: Wrench,
   mileage: Gauge,

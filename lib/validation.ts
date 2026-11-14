@@ -112,7 +112,6 @@ export const vehicleSchema = z.object({
       return v as (typeof FUEL)[number];
     }),
   mileage: intField("הזינו את הקילומטראז׳ הנוכחי", MAX_KM, "הקילומטראז׳ גבוה מדי. בדקו את המספר"),
-  test_due: dateOptional,
   license_due: dateOptional,
   insurance_due: dateOptional,
   next_service_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
@@ -169,4 +168,3 @@ export const tokenSchema = z
   .trim()
   .regex(/^[A-Za-z0-9_-]{16,128}$/, "קישור ההזמנה לא תקין.");
 
-export const dueFieldSchema = z.enum(["test_due", "license_due"]);

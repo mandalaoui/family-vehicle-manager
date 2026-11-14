@@ -151,21 +151,30 @@ select chk('p15: anon cannot delete log', public.run_as(null,null,$q$ select pub
 select chk('p15: delete_service_log ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.delete_service_log((select id from public.service_logs limit 1)) $q$), 'ok');
 select chk('p15: next_service null after deleting last log', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), null);
 
-update public.vehicles set test_due = current_date + 10, license_due = null where id=(select id from veh_id);
-select chk('p15: renew_due ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'test_due') $q$), 'ok');
-select chk('p15: renewed +12 months from old date', (select (test_due = (current_date + 10 + interval '12 months')::date)::text from public.vehicles where id=(select id from veh_id)), 'true');
-select chk('p15: undo info stored', (select ((renewal_undo -> 'test_due' ->> 'previous')::date = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
+update public.vehicles set license_due = current_date + 10 where id=(select id from veh_id);
+select chk('p15: renew_due ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'license_due') $q$), 'ok');
+select chk('p15: renewed +12 months from old date', (select (license_due = (current_date + 10 + interval '12 months')::date)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('p15: undo info stored', (select ((renewal_undo -> 'license_due' ->> 'previous')::date = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
 select chk('p15: renew bad field', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'insurance_due') $q$), 'invalid_field');
-select chk('p15: C cannot renew', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.renew_due((select id from veh_id), 'test_due') $q$), 'forbidden');
-select chk('p15: undo ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'test_due') $q$), 'ok');
-select chk('p15: date restored', (select (test_due = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
-select chk('p15: undo cleared', (select (renewal_undo ? 'test_due')::text from public.vehicles where id=(select id from veh_id)), 'false');
-select chk('p15: undo again unavailable', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'test_due') $q$), 'undo_unavailable');
+select chk('p15: test_due no longer renewable', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'test_due') $q$), 'invalid_field');
+select chk('p15: C cannot renew', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.renew_due((select id from veh_id), 'license_due') $q$), 'forbidden');
+select chk('p15: undo ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'ok');
+select chk('p15: date restored', (select (license_due = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('p15: undo cleared', (select (renewal_undo ? 'license_due')::text from public.vehicles where id=(select id from veh_id)), 'false');
+select chk('p15: undo again unavailable', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'undo_unavailable');
+update public.vehicles set license_due = null where id=(select id from veh_id);
 select chk('p15: renew from null date', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'license_due') $q$), 'ok');
 update public.vehicles set license_due = license_due + 5 where id=(select id from veh_id);
 select chk('p15: undo stale after manual edit', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'undo_stale');
 update public.vehicles set renewal_undo = jsonb_build_object('license_due', jsonb_build_object('previous', null, 'next', license_due, 'at', current_date - 31)) where id=(select id from veh_id);
 select chk('p15: undo expired after 30 days', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'undo_expired');
+-- migration 20261116100000 backfill (same statement as in the migration): earlier date wins
+update public.vehicles set test_due = date '2027-01-01', license_due = date '2027-06-01' where id=(select id from veh_id);
+update public.vehicles set license_due = case when license_due is null then test_due when test_due is null then license_due else least(license_due, test_due) end where test_due is not null;
+select chk('p16: merged to earlier date', (select license_due::text from public.vehicles where id=(select id from veh_id)), '2027-01-01');
+update public.vehicles set test_due = date '2027-03-01', license_due = null where id=(select id from veh_id);
+update public.vehicles set license_due = case when license_due is null then test_due when test_due is null then license_due else least(license_due, test_due) end where test_due is not null;
+select chk('p16: test-only vehicle keeps its date', (select license_due::text from public.vehicles where id=(select id from veh_id)), '2027-03-01');
 
 create temp table photo_path as select (select id from fam)::text || '/' || (select id from veh_id)::text || '.jpg' as p;
 grant select on photo_path to authenticated;

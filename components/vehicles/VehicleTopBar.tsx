@@ -12,11 +12,9 @@ import { deleteVehicle, renewDue, undoRenewDue } from "@/lib/actions/vehicles";
 import { daysBetween, formatDate } from "@/lib/format";
 import type { RenewalUndoEntry } from "@/types/database";
 
-type RenewField = "test_due" | "license_due";
 import { MileageModal } from "./MileageModal";
 import { ServiceModal } from "./ServiceModal";
 
-const FIELD_LABEL: Record<RenewField, string> = { test_due: "הטסט", license_due: "הרישוי" };
 const RENEW_WINDOW_DAYS = 60;
 
 interface TopBarVehicle {
@@ -24,7 +22,6 @@ interface TopBarVehicle {
   name: string;
   mileage: number;
   mileage_updated_at: string;
-  test_due: string | null;
   license_due: string | null;
 }
 
@@ -45,7 +42,7 @@ export function VehicleTopBar({
   staleAge: number | null;
   garages: string[];
   /** Active (recent, still applicable) renewal undo info, computed by the server. */
-  undo: Record<RenewField, RenewalUndoEntry | null>;
+  undo: RenewalUndoEntry | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -53,27 +50,27 @@ export function VehicleTopBar({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function undoRenew(field: RenewField) {
+  function undoRenew() {
     startTransition(async () => {
-      const res = await undoRenewDue(v.id, field);
+      const res = await undoRenewDue(v.id);
       if (!res.ok) {
         toast(res.error, { type: "error" });
         return;
       }
-      toast(`החידוש בוטל. תוקף ${FIELD_LABEL[field]} חזר ל־${formatDate(res.restoredTo)}.`, { type: "info" });
+      toast(`הסימון בוטל. התוקף חזר ל־${formatDate(res.restoredTo)}.`, { type: "info" });
       router.refresh();
     });
   }
 
-  function renew(field: RenewField) {
+  function renew() {
     startTransition(async () => {
-      const res = await renewDue(v.id, field);
+      const res = await renewDue(v.id);
       if (!res.ok) {
         toast(res.error, { type: "error" });
         return;
       }
-      toast(`${FIELD_LABEL[field]} סומן כחודש. תוקף חדש: ${formatDate(res.next)}.`, {
-        action: { label: "ביטול", onClick: () => undoRenew(field) },
+      toast(`הטסט והרישוי סומנו כמחודשים. תוקף חדש: ${formatDate(res.next)}.`, {
+        action: { label: "ביטול", onClick: () => undoRenew() },
       });
       router.refresh();
     });
@@ -94,21 +91,11 @@ export function VehicleTopBar({
   }
 
   const items: MenuItem[] = [];
-  for (const field of ["license_due", "test_due"] as const) {
-    const due = v[field];
-    if (due && daysBetween(today, due) <= RENEW_WINDOW_DAYS) {
-      items.push({ label: `סימון ${FIELD_LABEL[field]} כחודש`, icon: RefreshCw, onClick: () => renew(field) });
-    }
+  if (v.license_due && daysBetween(today, v.license_due) <= RENEW_WINDOW_DAYS) {
+    items.push({ label: "סימון כמחודש", icon: RefreshCw, onClick: renew });
   }
-  for (const field of ["license_due", "test_due"] as const) {
-    const entry = undo[field];
-    if (entry) {
-      items.push({
-        label: `ביטול חידוש ${FIELD_LABEL[field]} (חזרה ל־${formatDate(entry.previous)})`,
-        icon: Undo2,
-        onClick: () => undoRenew(field),
-      });
-    }
+  if (undo) {
+    items.push({ label: `ביטול סימון כמחודש (חזרה ל־${formatDate(undo.previous)})`, icon: Undo2, onClick: undoRenew });
   }
   items.push({ label: "עריכת פרטי הרכב", icon: Pencil, onClick: () => router.push(`/vehicles/${v.id}/edit`) });
   if (isAdmin) items.push({ label: "מחיקת הרכב", icon: Trash2, danger: true, onClick: () => setModal("delete") });

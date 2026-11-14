@@ -78,14 +78,13 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
           name,
           mileage: v.mileage,
           mileage_updated_at: v.mileage_updated_at,
-          test_due: v.test_due,
           license_due: v.license_due,
         }}
         isAdmin={isAdmin}
         today={today}
         staleAge={stale ? age : null}
         garages={garages}
-        undo={{ test_due: activeUndo(v, "test_due", today), license_due: activeUndo(v, "license_due", today) }}
+        undo={activeUndo(v, today)}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <span>
@@ -146,14 +145,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
 
         <Section icon={FileCheck} title="רישוי, טסט וביטוח" action={<RefreshMinistryButton vehicleId={v.id} />}>
           <div className="divide-y divide-silver-200">
-            {v.test_due && v.test_due === v.license_due ? (
-              <DueRow label="תוקף טסט ורישוי" due={v.test_due} today={today} />
-            ) : (
-              <>
-                <DueRow label="תוקף רישוי" due={v.license_due} today={today} />
-                <DueRow label="תוקף טסט" due={v.test_due} today={today} />
-              </>
-            )}
+            <DueRow label="תוקף טסט ורישוי" due={v.license_due} today={today} />
             <DueRow label="תוקף ביטוח" due={v.insurance_due} today={today} />
             <Suspense fallback={null}>
               <LastTestInfo plate={v.plate} />

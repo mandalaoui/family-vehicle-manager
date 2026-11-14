@@ -5,7 +5,7 @@ import { dbErrorMessage, MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/
 import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { formatNumber, KM, todayInIsrael } from "@/lib/format";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
-import { dueFieldSchema, mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/lib/validation";
+import { mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/lib/validation";
 
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
@@ -108,38 +108,33 @@ export async function updateMileage(id: string, mileage: string): Promise<Action
   return { ok: true, mileage: parsed.data.mileage };
 }
 
-/** Marks a test/license as renewed for 12 months (one DB transaction); the DB stores the undo info. */
-export async function renewDue(
-  id: string,
-  field: string,
-): Promise<ActionResult<{ previous: string | null; next: string }>> {
+/** Marks the test + license as renewed for 12 months (one DB transaction); the DB stores the undo info. */
+export async function renewDue(id: string): Promise<ActionResult<{ previous: string | null; next: string }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
   const vid = uuidSchema.safeParse(id);
-  const f = dueFieldSchema.safeParse(field);
-  if (!vid.success || !f.success) return fail(BAD_REQUEST);
+  if (!vid.success) return fail(BAD_REQUEST);
 
-  const { data, error } = await s.supabase.rpc("renew_due", { p_vehicle_id: vid.data, p_field: f.data });
+  const { data, error } = await s.supabase.rpc("renew_due", { p_vehicle_id: vid.data, p_field: "license_due" });
   if (error) return fail(dbErrorMessage(error, "renew_due"));
   revalidateVehicle(vid.data);
   return { ok: true, previous: data.previous, next: data.next };
 }
 
 /** Undo for renewDue (30 days, only while the date is still the renewed one; enforced in the DB). */
-export async function undoRenewDue(id: string, field: string): Promise<ActionResult<{ restoredTo: string | null }>> {
+export async function undoRenewDue(id: string): Promise<ActionResult<{ restoredTo: string | null }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
   const vid = uuidSchema.safeParse(id);
-  const f = dueFieldSchema.safeParse(field);
-  if (!vid.success || !f.success) return fail(BAD_REQUEST);
+  if (!vid.success) return fail(BAD_REQUEST);
 
-  const { data, error } = await s.supabase.rpc("undo_renew_due", { p_vehicle_id: vid.data, p_field: f.data });
+  const { data, error } = await s.supabase.rpc("undo_renew_due", { p_vehicle_id: vid.data, p_field: "license_due" });
   if (error) return fail(dbErrorMessage(error, "undo_renew_due"));
   revalidateVehicle(vid.data);
   return { ok: true, restoredTo: data };
 }
 
-/** Updates test + license dates from the Ministry of Transport (tokef_dt), bypassing the 1-day cache. */
+/** Updates the test + license date from the Ministry of Transport (tokef_dt), bypassing the 1-day cache. */
 export async function refreshFromMinistry(id: string): Promise<ActionResult<{ validUntil: string }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
@@ -158,7 +153,7 @@ export async function refreshFromMinistry(id: string): Promise<ActionResult<{ va
 
   const { data, error } = await s.supabase
     .from("vehicles")
-    .update({ test_due: validUntil, license_due: validUntil })
+    .update({ license_due: validUntil })
     .eq("id", vid.data)
     .select("id");
   if (error) return fail(dbErrorMessage(error, "refresh_update"));

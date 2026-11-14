@@ -2,7 +2,7 @@ import { daysBetween, formatDate, formatDays, formatNumber, KM } from "./format"
 
 // Pure, server-side friendly alert logic. `today` is an ISO date in Asia/Jerusalem.
 export type AlertLevel = "overdue" | "urgent" | "soon" | "ok";
-export type AlertKind = "test" | "license" | "test_license" | "insurance" | "service" | "mileage";
+export type AlertKind = "license" | "insurance" | "service" | "mileage";
 
 export const LEVEL_RANK: Record<AlertLevel, number> = { overdue: 0, urgent: 1, soon: 2, ok: 3 };
 export const LEVEL_LABEL: Record<AlertLevel, string> = {
@@ -19,7 +19,6 @@ export const SERVICE_SOON_KM = 1000;
 export const STALE_MILEAGE_DAYS = 60;
 
 export interface AlertVehicle {
-  test_due: string | null;
   license_due: string | null;
   insurance_due: string | null;
   mileage: number;
@@ -58,33 +57,18 @@ export function describeDays(days: number): string {
   return `בעוד ${days} ימים`;
 }
 
-const DATE_TITLES: Record<"test_due" | "license_due" | "insurance_due", { kind: AlertKind; title: string }> = {
-  test_due: { kind: "test", title: "חידוש טסט" },
-  license_due: { kind: "license", title: "חידוש רישוי" },
+// In Israel the annual license renewal requires passing the test, so test + license are ONE date.
+const DATE_TITLES: Record<"license_due" | "insurance_due", { kind: AlertKind; title: string }> = {
+  license_due: { kind: "license", title: "טסט וחידוש רישיון" },
   insurance_due: { kind: "insurance", title: "חידוש ביטוח" },
 };
 
 export function getVehicleAlerts(v: AlertVehicle, today: string): VehicleAlert[] {
   const alerts: VehicleAlert[] = [];
 
-  // In Israel the annual license renewal requires passing the test: when both dates are the same,
-  // show one merged alert instead of two.
-  const merged = v.test_due !== null && v.test_due === v.license_due;
-  if (merged && v.test_due) {
-    const days = daysBetween(today, v.test_due);
-    alerts.push({
-      kind: "test_license",
-      title: "טסט וחידוש רישיון",
-      level: dateLevel(days),
-      detail: `${describeDays(days)} · תוקף עד ${formatDate(v.test_due)}`,
-      sort: days,
-    });
-  }
-
-  for (const field of ["test_due", "license_due", "insurance_due"] as const) {
+  for (const field of ["license_due", "insurance_due"] as const) {
     const due = v[field];
     if (!due) continue;
-    if (merged && field !== "insurance_due") continue;
     const days = daysBetween(today, due);
     alerts.push({
       ...DATE_TITLES[field],

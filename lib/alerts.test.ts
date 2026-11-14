@@ -4,7 +4,6 @@ import { addMonths, daysBetween, formatDate, formatPlate, maskDate, parseDMY, to
 
 const today = "2026-11-14";
 const base: AlertVehicle = {
-  test_due: null,
   license_due: null,
   insurance_due: null,
   mileage: 50000,
@@ -23,19 +22,15 @@ describe("dateLevel", () => {
   });
 });
 
-describe("merged test + license alert", () => {
-  it("shows one alert when both dates are equal", () => {
-    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-11-20" }, today);
+describe("test + license is one concept", () => {
+  it("produces a single alert for license_due", () => {
+    const alerts = getVehicleAlerts({ ...base, license_due: "2026-11-20" }, today);
     expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ kind: "test_license", title: "טסט וחידוש רישיון", level: "urgent" });
+    expect(alerts[0]).toMatchObject({ kind: "license", title: "טסט וחידוש רישיון", level: "urgent" });
   });
-  it("keeps two alerts when the dates differ", () => {
-    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-12-20" }, today);
-    expect(alerts.map((a) => a.kind).sort()).toEqual(["license", "test"]);
-  });
-  it("keeps insurance separate from the merged alert", () => {
-    const alerts = getVehicleAlerts({ ...base, test_due: "2026-11-20", license_due: "2026-11-20", insurance_due: "2026-11-20" }, today);
-    expect(alerts.map((a) => a.kind).sort()).toEqual(["insurance", "test_license"]);
+  it("keeps insurance separate", () => {
+    const alerts = getVehicleAlerts({ ...base, license_due: "2026-11-20", insurance_due: "2026-11-20" }, today);
+    expect(alerts.map((a) => a.kind).sort()).toEqual(["insurance", "license"]);
   });
 });
 
@@ -55,18 +50,17 @@ describe("getVehicleAlerts", () => {
     expect(getVehicleAlerts(base, today)).toEqual([]);
   });
 
-  it("sorts overdue before urgent before soon", () => {
+  it("sorts overdue before urgent", () => {
     const alerts = getVehicleAlerts(
       {
         ...base,
-        test_due: "2026-12-01", // 17 days -> soon
         license_due: "2026-11-10", // -4 -> overdue
         insurance_due: "2026-11-18", // 4 -> urgent
       },
       today,
     );
-    expect(alerts.map((a) => a.level)).toEqual(["overdue", "urgent", "soon"]);
-    expect(alerts.map((a) => a.kind)).toEqual(["license", "insurance", "test"]);
+    expect(alerts.map((a) => a.level)).toEqual(["overdue", "urgent"]);
+    expect(alerts.map((a) => a.kind)).toEqual(["license", "insurance"]);
   });
 
   it("flags service by km and stale mileage", () => {

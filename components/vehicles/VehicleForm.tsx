@@ -33,7 +33,6 @@ function initialState(v?: Vehicle) {
     color: v?.color ?? "",
     fuel_type: v?.fuel_type ?? "",
     mileage: v ? String(v.mileage) : "",
-    test_due: dateValue(v?.test_due),
     license_due: dateValue(v?.license_due),
     insurance_due: dateValue(v?.insurance_due),
     next_service_km: v?.next_service_km != null ? String(v.next_service_km) : "",
@@ -66,6 +65,8 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
 
   // Prefill from the Ministry of Transport. Every field stays editable afterwards.
   function apply(m: MinistryVehicle) {
+    // Programmatic prefill: stale "required" errors for the filled fields no longer apply.
+    clearErrors("make", "model", "year", "color", "fuel_type", "license_due");
     setF((p) => ({
       ...p,
       make: m.make || p.make,
@@ -73,7 +74,6 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
       year: m.year ? String(m.year) : p.year,
       color: m.color ?? p.color,
       fuel_type: m.fuel_type ?? p.fuel_type,
-      test_due: m.valid_until ? formatDate(m.valid_until) : p.test_due,
       license_due: m.valid_until ? formatDate(m.valid_until) : p.license_due,
     }));
   }
@@ -113,7 +113,18 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
     }
     timer.current = setTimeout(() => runLookup(digits), 600);
   }
-  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+  // Editing a field clears its error: errors only appear after a submit attempt and go away as the user fixes them.
+  const clearErrors = (...keys: string[]) =>
+    setErrors((prev) => {
+      if (!keys.some((k) => k in prev)) return prev;
+      const next = { ...prev };
+      for (const k of keys) delete next[k];
+      return next;
+    });
+  const set = (k: keyof typeof f, v: string) => {
+    setF((p) => ({ ...p, [k]: v }));
+    clearErrors(k);
+  };
   const cancelHref = vehicle ? `/vehicles/${vehicle.id}` : "/";
 
   function submit(e: React.FormEvent) {
@@ -199,10 +210,7 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
       <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="mb-4 text-base font-bold">תאריכים וטיפול</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="test_due" label="תוקף טסט" error={errors.test_due} hint="במאגר משרד התחבורה זה תוקף הרישוי השנתי. אפשר להשאיר ריק.">
-            <DateInput id="test_due" value={f.test_due} error={errors.test_due} onChange={(v) => set("test_due", v)} />
-          </Field>
-          <Field id="license_due" label="תוקף רישוי" error={errors.license_due} hint="אפשר להשאיר ריק">
+          <Field id="license_due" label="תוקף טסט ורישוי" error={errors.license_due} hint="תאריך אחד: חידוש הרישוי השנתי מחייב מעבר טסט. אפשר להשאיר ריק.">
             <DateInput id="license_due" value={f.license_due} error={errors.license_due} onChange={(v) => set("license_due", v)} />
           </Field>
           <Field id="insurance_due" label="תוקף ביטוח" error={errors.insurance_due} hint="אפשר להשאיר ריק">
