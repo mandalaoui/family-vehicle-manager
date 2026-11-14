@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניהול רכבי המשפחה</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Heebo', 'system-ui', 'Segoe UI', 'Arial', 'sans-serif'] },
+        colors: {
+          ink: '#111827',
+          muted: '#4b5563',
+          brand: { DEFAULT: '#1d4ed8', dark: '#1e40af', 50: '#eff4ff' },
+          silver: { 50: '#f5f6f8', 100: '#e8eaed', 200: '#dde0e5', 300: '#c3c9d0' }
+        }
+      }
+    }
+  };
+</script>
+<style>
+  /* Layout idea: one calm column on phones, card grid from 640px, bottom tab bar below 768px. */
+  :root {
+    --brand: #1d4ed8;
+    --ink: #111827;
+    --muted: #4b5563;
+    --silver: #e8eaed;
+    --line: #c3c9d0;
+    --card: #ffffff;
+    --font-body: 'Heebo', system-ui, 'Segoe UI', Arial, sans-serif;
+  }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--silver); color: var(--ink); font-family: var(--font-body); -webkit-text-size-adjust: 100%; }
+  :focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+  button, a, input, select, textarea { font-family: inherit; }
+  h1, h2, h3 { text-wrap: balance; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .toast-in { animation: toast-in .18s ease-out; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+/* =========================================================
+   Icons (lucide icon data rendered as React SVG)
+   ========================================================= */
+function Icon({ name, size = 20, className = '', style }) {
+  const def = window.lucide && window.lucide.icons && window.lucide.icons[name];
+  if (!def) return null;
+  const nodes = Array.isArray(def) && def[0] === 'svg' ? (def[2] || []) : def;
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      className={`shrink-0 ${className}`} style={style} aria-hidden="true" focusable="false">
+      {nodes.map(([tag, attrs], i) => React.createElement(tag, { ...attrs, key: i }))}
+    </svg>
+  );
+}
+
+/* =========================================================
+   Date / number helpers (DD.MM.YYYY, Israeli formats)
+   ========================================================= */
+const KM = 'ק"מ';
+const pad = (n) => String(n).padStart(2, '0');
+const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseISO = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const TODAY_ISO = (() => { const n = new Date(); return toISO(new Date(n.getFullYear(), n.getMonth(), n.getDate())); })();
+const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return toISO(d); };
+const addMonths = (iso, n) => {
+  const d = parseISO(iso); const day = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n);
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, last));
+  return toISO(d);
+};
+const dayDiff = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 86400000); // b - a
+const daysFromToday = (iso) => dayDiff(TODAY_ISO, iso);
+const fmtDate = (iso) => { if (!iso) return '—'; const [y, m, d] = iso.split('-'); return `${d}.${m}.${y}`; };
+const parseDMY = (str) => {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec((str || '').trim());
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = +m[3];
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${y}-${pad(mo)}-${pad(d)}`;
+};
+const maskDate = (raw) => {
+  const digits = raw.replace(/\D/g, '').slice(0, 8);
+  let out = digits.slice(0, 2);
+  if (digits.length > 2) out += '.' + digits.slice(2, 4);
+  if (digits.length > 4) out += '.' + digits.slice(4);
+  return out;
+};
+const nf = new Intl.NumberFormat('he-IL');
+const fmtNum = (n) => nf.format(n);
+const digitsOnly = (s) => s.replace(/\D/g, '');
+const fmtPlate = (p) => (p.length === 8 ? `${p.slice(0, 3)}-${p.slice(3, 5)}-${p.slice(5)}` : `${p.slice(0, 2)}-${p.slice(2, 5)}-${p.slice(5)}`);
+const plural = (n, one, many) => (n === 1 ? one : many);
+const o = (n) => addDays(TODAY_ISO, n); // offset from today, for relative mock data
+
+/* =========================================================
+   Urgency model
+   ========================================================= */
+const LEVELS = {
+  overdue: { label: 'באיחור', icon: 'AlertTriangle', cls: 'bg-red-50 text-red-800 border-red-300', rank: 0 },
+  soon: { label: 'בקרוב', icon: 'Clock', cls: 'bg-amber-50 text-amber-900 border-amber-300', rank: 1 },
+  ok: { label: 'תקין', icon: 'CheckCircle2', cls: 'bg-green-50 text-green-800 border-green-300', rank: 2 },
+};
+const dateLevel = (days, soonWithin = 30) => (days < 0 ? 'overdue' : days <= soonWithin ? 'soon' : 'ok');
+const worse = (a, b) => (LEVELS[a].rank <= LEVELS[b].rank ? a : b);
+
+const latestReading = (v) => v.readings.reduce((a, b) => (!a || b.km >= a.km ? b : a), null);
+const dailyRate = (v) => {
+  const r = [...v.readings].sort((a, b) => a.date.localeCompare(b.date));
+  if (r.length < 2) return 35;
+  const days = dayDiff(r[0].date, r[r.length - 1].date);
+  const km = r[r.length - 1].km - r[0].km;
+  return days >= 14 && km > 0 ? km / days : 35;
+};
+// Next service = whichever comes first: km target or date target.
+const serviceInfo = (v) => {
+  const s = v.service;
+  if (!s || s.lastKm == null) return null;
+  const nextKm = s.lastKm + s.intervalKm;
+  const nextDate = addMonths(s.lastDate, s.intervalMonths);
+  const latest = latestReading(v);
+  const kmLeft = nextKm - (latest ? latest.km : s.lastKm);
+  const daysLeft = daysFromToday(nextDate);
+  const kmDays = Math.round(kmLeft / dailyRate(v));
+  const kmLevel = kmLeft <= 0 ? 'overdue' : kmLeft <= 1000 ? 'soon' : 'ok';
+  const level = worse(kmLevel, dateLevel(daysLeft));
+  return { nextKm, nextDate, kmLeft, daysLeft, kmDays, level, first: kmDays <= daysLeft ? 'km' : 'date' };
+};
+const warrantyInfo = (v) => {
+  const w = v.warranty; if (!w) return null;
+  const latest = latestReading(v);
+  const days = daysFromToday(w.until);
+  const kmLeft = w.untilKm - (latest ? latest.km : 0);
+  const expired = days < 0 || kmLeft < 0;
+  const level = expired ? 'expired' : days <= 60 || kmLeft <= 3000 ? 'soon' : 'ok';
+  return { days, kmLeft, expired, level };
+};
+// The recurring-service baseline is always the latest "טיפול תקופתי" entry in the history.
+const recalcService = (history, service) => {
+  const periodic = history.filter((h) => h.type === 'טיפול תקופתי').sort((a, b) => b.date.localeCompare(a.date) || b.km - a.km);
+  return periodic.length ? { ...service, lastKm: periodic[0].km, lastDate: periodic[0].date } : { ...service, lastKm: null, lastDate: null };
+};
+const odoAge = (v) => { const l = latestReading(v); return l ? -daysFromToday(l.date) : null; };
+
+const regDetail = (d) => (d < 0 ? `באיחור של ${d === -1 ? 'יום' : `${-d} ימים`}` : d === 0 ? 'פג היום' : d === 1 ? 'פג מחר' : `בעוד ${d} ימים`);
+
+// All trackable items of a vehicle; dashboard shows the non-ok ones.
+const vehicleItems = (v) => {
+  const items = [];
+  const rd = daysFromToday(v.registrationExpiry);
+  items.push({ key: v.id + '-reg', vehicle: v, icon: 'FileCheck', title: 'חידוש רישוי', detail: `${regDetail(rd)} · תוקף עד ${fmtDate(v.registrationExpiry)}`, level: dateLevel(rd), sort: rd });
+  const si = serviceInfo(v);
+  if (si) {
+    const km = si.kmLeft > 0 ? `עוד ${fmtNum(si.kmLeft)} ${KM}` : `חריגה של ${fmtNum(-si.kmLeft)} ${KM}`;
+    items.push({ key: v.id + '-svc', vehicle: v, icon: 'Wrench', title: 'טיפול תקופתי', detail: `${km} או עד ${fmtDate(si.nextDate)}`, level: si.level, sort: Math.min(si.daysLeft, si.kmDays) });
+  }
+  const age = odoAge(v);
+  if (age === null || age > 60) {
+    items.push({ key: v.id + '-odo', vehicle: v, icon: 'Gauge', title: 'עדכון קילומטראז׳', detail: age === null ? 'לא הוזן קילומטראז׳' : `הקריאה האחרונה לפני ${age} ימים`, level: 'soon', sort: 1000 });
+  }
+  const wi = warrantyInfo(v);
+  if (wi && wi.level === 'soon') {
+    items.push({ key: v.id + '-war', vehicle: v, icon: 'ShieldCheck', title: 'סיום אחריות', detail: wi.days <= 60 ? `האחריות מסתיימת בעוד ${wi.days} ימים` : `נותרו ${fmtNum(wi.kmLeft)} ${KM} לסיום האחריות`, level: 'soon', sort: wi.days });
+  }
+  return items;
+};
+const cmpItems = (a, b) => LEVELS[a.level].rank - LEVELS[b.level].rank || a.sort - b.sort;
+
+/* =========================================================
+   Mock data
+   ========================================================= */
+const SEED_GARAGES = [
+  { id: 'g1', name: 'מוסך אלון', city: 'פתח תקווה', address: 'ז׳בוטינסקי 45, פתח תקווה', phone: '03-555-0142' },
+  { id: 'g2', name: 'אוטו־סרוויס רמת גן', city: 'רמת גן', address: 'ביאליק 12, רמת גן', phone: '03-555-0187' },
+  { id: 'g3', name: 'מוסך הצפון', city: 'פתח תקווה', address: 'האורגים 8, פתח תקווה', phone: '03-555-0123' },
+  { id: 'g4', name: 'מרכז שירות ראשון', city: 'ראשון לציון', address: 'הנחושת 3, ראשון לציון', phone: '03-555-0166' },
+];
+const SEED_MEMBERS = [
+  { id: 'm1', name: 'אבי כהן', email: 'avi.cohen@example.com', role: 'admin', you: true },
+  { id: 'm2', name: 'דנה כהן', email: 'dana.cohen@example.com', role: 'member' },
+  { id: 'm3', name: 'נועה כהן', email: 'noa.cohen@example.com', role: 'member' },
+];
+const SEED_VEHICLES = [
+  {
+    id: 'v1', nickname: 'הקורולה', plate: '3456712', make: 'טויוטה', model: 'קורולה', year: 2019, color: 'לבן', fuel: 'בנזין',
+    lastInspection: o(-377), registrationExpiry: o(-12),
+    readings: [{ date: o(-200), km: 74900 }, { date: o(-120), km: 79400 }, { date: o(-20), km: 84200 }],
+    service: { intervalKm: 10000, intervalMonths: 12, lastKm: 80000, lastDate: o(-100) },
+    history: [
+      { id: 'h1', date: o(-100), km: 80000, type: 'טיפול תקופתי', garage: 'מוסך אלון', cost: 1180, notes: 'החלפת שמן ופילטרים' },
+      { id: 'h2', date: o(-250), km: 73200, type: 'החלפת צמיגים', garage: 'מוסך הצפון', cost: 2400, notes: 'ארבעה צמיגים חדשים' },
+      { id: 'h3', date: o(-285), km: 70000, type: 'טיפול תקופתי', garage: 'מוסך אלון', cost: 990, notes: '' },
+      { id: 'h4', date: o(-377), km: 68100, type: 'מבחן רישוי (טסט)', garage: 'מוסך הצפון', cost: 320, notes: '' },
+    ],
+    warranty: { name: 'אחריות יצרן מורחבת', provider: 'טויוטה ישראל', until: o(400), untilKm: 120000 },
+    garageIds: ['g1', 'g4'],
+  },
+  {
+    id: 'v2', nickname: 'הטוסון', plate: '72149856', make: 'יונדאי', model: 'טוסון', year: 2021, color: 'אפור', fuel: 'היברידי',
+    lastInspection: o(-360), registrationExpiry: o(5),
+    readings: [{ date: o(-260), km: 79200 }, { date: o(-140), km: 83400 }, { date: o(-12), km: 87300 }],
+    service: { intervalKm: 10000, intervalMonths: 12, lastKm: 78000, lastDate: o(-300) },
+    history: [
+      { id: 'h5', date: o(-150), km: 83000, type: 'החלפת בלמים', garage: 'אוטו־סרוויס רמת גן', cost: 1650, notes: 'רפידות וצלחות קדמיות' },
+      { id: 'h6', date: o(-300), km: 78000, type: 'טיפול תקופתי', garage: 'אוטו־סרוויס רמת גן', cost: 1320, notes: 'כולל החלפת מסנן מזגן' },
+      { id: 'h7', date: o(-360), km: 76500, type: 'מבחן רישוי (טסט)', garage: 'מוסך הצפון', cost: 330, notes: '' },
+    ],
+    warranty: { name: 'אחריות יצרן', provider: 'יונדאי ישראל', until: o(45), untilKm: 100000 },
+    garageIds: ['g2', 'g3'],
+  },
+  {
+    id: 'v3', nickname: 'הפיקנטו של נועה', plate: '8845231', make: 'קיה', model: 'פיקנטו', year: 2022, color: 'אדום', fuel: 'בנזין',
+    lastInspection: o(-175), registrationExpiry: o(190),
+    readings: [{ date: o(-230), km: 13800 }, { date: o(-75), km: 18900 }],
+    service: { intervalKm: 10000, intervalMonths: 12, lastKm: 14200, lastDate: o(-150) },
+    history: [
+      { id: 'h8', date: o(-150), km: 14200, type: 'טיפול תקופתי', garage: 'מוסך אלון', cost: 850, notes: '' },
+      { id: 'h9', date: o(-175), km: 14000, type: 'מבחן רישוי (טסט)', garage: 'מוסך הצפון', cost: 310, notes: '' },
+    ],
+    warranty: { name: 'אחריות יצרן', provider: 'קיה ישראל', until: o(900), untilKm: 150000 },
+    garageIds: ['g1', 'g3'],
+  },
+];
+const LOOKUP = {
+  '1234567': { make: 'סקודה', model: 'אוקטביה', year: 2020, color: 'כסוף', fuel: 'בנזין', lastInspection: o(-120), registrationExpiry: o(245) },
+  '7654321': { make: 'מאזדה', model: '3', year: 2018, color: 'כחול', fuel: 'בנזין', lastInspection: o(-300), registrationExpiry: o(65) },
+  '12345678': { make: 'קיה', model: 'נירו', year: 2023, color: 'לבן', fuel: 'היברידי', lastInspection: o(-60), registrationExpiry: o(305) },
+  '5550123': { make: 'סוזוקי', model: 'סוויפט', year: 2016, color: 'אדום', fuel: 'בנזין', lastInspection: o(-340), registrationExpiry: o(25) },
+};
+const FUELS = ['בנזין', 'דיזל', 'היברידי', 'פלאג־אין', 'חשמלי'];
+const COLORS = ['לבן', 'שחור', 'כסוף', 'אפור', 'כחול', 'אדום', 'ירוק', 'צהוב', 'אחר'];
+const COLOR_HEX = { 'לבן': '#f8fafc', 'שחור': '#1f2937', 'כסוף': '#cbd5e1', 'אפור': '#94a3b8', 'כחול': '#3b82f6', 'אדום': '#ef4444', 'ירוק': '#22c55e', 'צהוב': '#facc15', 'אחר': '#a8a29e' };
+
+/* =========================================================
+   Shared UI
+   ========================================================= */
+const L = ({ children }) => <bdi dir="ltr">{children}</bdi>;
+
+function Plate({ plate }) {
+  return (
+    <bdi dir="ltr" className="inline-flex shrink-0 items-stretch overflow-hidden rounded-md border border-gray-800 bg-yellow-300 text-sm font-bold tracking-wider text-gray-900">
+      <span className="grid place-items-center bg-blue-700 px-1 text-[10px] leading-none text-white">IL</span>
+      <span className="px-2 py-0.5 tabular-nums">{fmtPlate(plate)}</span>
+    </bdi>
+  );
+}
+
+function Status({ level, label }) {
+  const l = LEVELS[level];
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${l.cls}`}>
+      <Icon name={l.icon} size={14} />{label || l.label}
+    </span>
+  );
+}
+
+const BTN = {
+  primary: 'bg-brand text-white hover:bg-brand-dark border border-transparent',
+  secondary: 'bg-white text-brand border border-brand hover:bg-brand-50',
+  neutral: 'bg-white text-ink border border-silver-300 hover:bg-silver-100',
+  danger: 'bg-red-700 text-white hover:bg-red-800 border border-transparent',
+  ghost: 'text-brand hover:bg-brand-50 border border-transparent',
+};
+function Button({ variant = 'primary', icon, children, className = '', as: Tag = 'button', ...p }) {
+  return (
+    <Tag {...(Tag === 'button' ? { type: 'button' } : {})}
+      className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${BTN[variant]} ${className}`} {...p}>
+      {icon && <Icon name={icon} size={18} />}{children}
+    </Tag>
+  );
+}
+
+function Menu({ items, label = 'פעולות נוספות' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('touchstart', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" aria-label={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((x) => !x)}
+        className="grid h-11 w-11 place-items-center rounded-xl border border-silver-300 bg-white text-ink hover:bg-silver-100">
+        <Icon name="MoreHorizontal" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute end-0 top-12 z-30 min-w-[210px] rounded-xl border border-silver-300 bg-white p-1 shadow-lg">
+          {items.map((it) => (
+            <button key={it.label} type="button" role="menuitem" onClick={() => { setOpen(false); it.onClick(); }}
+              className={`flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 text-start text-sm font-medium hover:bg-silver-100 ${it.danger ? 'text-red-700' : 'text-ink'}`}>
+              <Icon name={it.icon} size={18} />{it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Modal({ title, onClose, children, footer }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const prev = document.activeElement;
+    const el = ref.current;
+    const focusables = () => [...el.querySelectorAll('input,select,textarea,button,a[href]')].filter((n) => !n.disabled);
+    const first = el.querySelector('input,select,textarea') || focusables()[1] || el;
+    first.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Tab') {
+        const f = focusables(); if (!f.length) return;
+        const a = f[0], z = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+        else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; if (prev && prev.focus) prev.focus(); };
+  }, []);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center sm:p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
+        className="flex max-h-[92dvh] w-full flex-col rounded-t-2xl bg-white shadow-xl sm:max-w-lg sm:rounded-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-silver-200 px-5 py-3">
+          <h2 className="text-lg font-bold">{title}</h2>
+          <button type="button" aria-label="סגירה" onClick={onClose} className="grid h-11 w-11 place-items-center rounded-xl hover:bg-silver-100"><Icon name="X" /></button>
+        </div>
+        <div className="overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="flex flex-col-reverse gap-2 border-t border-silver-200 px-5 py-3 sm:flex-row sm:justify-start">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onClose }) {
+  return (
+    <Modal title={title} onClose={onClose}
+      footer={<>
+        <Button variant="neutral" onClick={onClose}>ביטול</Button>
+        <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
+      </>}>
+      <p className="text-base leading-relaxed">{body}</p>
+    </Modal>
+  );
+}
+
+const inputCls = (err) => `min-h-[44px] w-full rounded-xl border bg-white px-3 text-base text-ink placeholder:text-gray-500 ${err ? 'border-red-600' : 'border-silver-300'}`;
+function Field({ id, label, error, hint, children }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-semibold">{label}</label>
+      {children}
+      {hint && !error && <p className="text-xs text-muted">{hint}</p>}
+      {error && <p id={id + '-err'} role="alert" className="flex items-start gap-1 text-xs font-semibold text-red-700"><Icon name="AlertTriangle" size={14} className="mt-0.5" />{error}</p>}
+    </div>
+  );
+}
+const aria = (id, error) => ({ 'aria-invalid': !!error, 'aria-describedby': error ? id + '-err' : undefined });
+function TextInput({ id, error, ltr, className = '', ...p }) {
+  return <input id={id} {...aria(id, error)} {...(ltr ? { dir: 'ltr' } : {})} className={`${inputCls(error)} ${ltr ? 'text-end' : ''} ${className}`} {...p} />;
+}
+function DateInput({ id, value, onChange, error }) {
+  return <TextInput id={id} ltr inputMode="numeric" autoComplete="off" placeholder="DD.MM.YYYY" maxLength={10} value={value} error={error} onChange={(e) => onChange(maskDate(e.target.value))} />;
+}
+function NumInput({ id, value, onChange, error, max = 7, ...p }) {
+  return <TextInput id={id} ltr inputMode="numeric" autoComplete="off" value={value} error={error} onChange={(e) => onChange(digitsOnly(e.target.value).slice(0, max))} {...p} />;
+}
+function Select({ id, value, onChange, error, options, placeholder = 'בחירה' }) {
+  const opts = value && !options.includes(value) ? [...options, value] : options;
+  return (
+    <select id={id} {...aria(id, error)} value={value} onChange={(e) => onChange(e.target.value)} className={inputCls(error)}>
+      <option value="">{placeholder}</option>
+      {opts.map((x) => <option key={x} value={x}>{x}</option>)}
+    </select>
+  );
+}
+
+function Section({ icon, title, action, children, className = '' }) {
+  return (
+    <section className={`min-w-0 rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5 ${className}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-base font-bold"><Icon name={icon} size={20} className="text-brand" />{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+function EmptyState({ icon, title, children }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-silver-300 bg-silver-50 px-4 py-6 text-center">
+      <div className="grid h-11 w-11 place-items-center rounded-full bg-silver-100 text-muted"><Icon name={icon} size={22} /></div>
+      <p className="font-semibold">{title}</p>
+      {children && <p className="max-w-sm text-sm text-muted">{children}</p>}
+    </div>
+  );
+}
+function ScreenHeader({ title, subtitle, onBack, children }) {
+  return (
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        {onBack && <button type="button" aria-label="חזרה" onClick={onBack} className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-silver-300 bg-white hover:bg-silver-100"><Icon name="ArrowRight" /></button>}
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-bold">{title}</h1>
+          {subtitle && <div className="text-sm text-muted">{subtitle}</div>}
+        </div>
+      </div>
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+function PhotoPlaceholder({ v }) {
+  return (
+    <div className="relative grid h-32 place-items-center bg-silver-100">
+      <div className="flex flex-col items-center gap-1 text-gray-500"><Icon name="Car" size={52} /><span className="text-xs">מקום לתמונה</span></div>
+      <span className="absolute bottom-2 start-2 inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-medium shadow-sm">
+        <span className="h-3 w-3 rounded-full border border-gray-400" style={{ background: COLOR_HEX[v.color] || COLOR_HEX['אחר'] }} />{v.color}
+      </span>
+    </div>
+  );
+}
+function Switch({ checked, onChange, label, id, disabled }) {
+  return (
+    <button id={id} type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
+      className={`relative h-8 w-14 shrink-0 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'border-brand bg-brand' : 'border-gray-400 bg-silver-200'}`}>
+      <span className={`absolute top-0.5 grid h-6 w-6 place-items-center rounded-full bg-white shadow transition-all ${checked ? 'end-0.5 text-brand' : 'start-0.5 text-gray-500'}`}>
+        <Icon name={checked ? 'Check' : 'X'} size={14} />
+      </span>
+    </button>
+  );
+}
+
+/* Garage helpers */
+const mapsSearch = (city) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('מוסך רכב ' + city)}`;
+const mapsNav = (address) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+function GarageActions({ g, toast }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button as="a" variant="secondary" icon="Phone" href={`tel:${g.phone.replace(/\D/g, '')}`} onClick={() => toast(`מחייג אל ${g.name}`, 'info')}>התקשר</Button>
+      <Button as="a" variant="secondary" icon="Navigation" href={mapsNav(g.address)} target="_blank" rel="noopener noreferrer" onClick={() => toast(`פותח ניווט אל ${g.name}`, 'info')}>ניווט</Button>
+    </div>
+  );
+}
+
+/* =========================================================
+   Screen 1: Family dashboard
+   ========================================================= */
+function NoAccess({ go }) {
+  return (
+    <div className="mx-auto max-w-md pt-6">
+      <EmptyState icon="Shield" title="הפעולה הזאת פתוחה למנהלי המשפחה בלבד">כדי להוסיף רכב, בקשו ממנהל המשפחה.</EmptyState>
+      <div className="mt-4 flex justify-center"><Button variant="neutral" onClick={() => go('dashboard')}>חזרה לרכבים</Button></div>
+    </div>
+  );
+}
+
+function Dashboard({ vehicles, go, isAdmin }) {
+  const actions = useMemo(() => vehicles.flatMap(vehicleItems).filter((i) => i.level !== 'ok').sort(cmpItems), [vehicles]);
+  return (
+    <>
+      <ScreenHeader title="משפחת כהן"
+        subtitle={`${vehicles.length} ${plural(vehicles.length, 'רכב', 'רכבים')} · ${actions.length} ${plural(actions.length, 'פעולה פתוחה', 'פעולות פתוחות')}`}>
+        {isAdmin && <Button icon="Plus" className="w-full sm:w-auto" onClick={() => go('add')}>הוספת רכב</Button>}
+      </ScreenHeader>
+
+      <section aria-labelledby="actions-h" className="mb-8">
+        <h2 id="actions-h" className="mb-3 text-lg font-bold">דורש טיפול</h2>
+        {actions.length === 0 ? (
+          <div className="rounded-2xl border border-green-300 bg-green-50 p-5">
+            <div className="flex items-center gap-3 text-green-900">
+              <Icon name="CheckCircle2" size={24} />
+              <div><p className="font-bold">הכול תקין</p><p className="text-sm">אין כרגע רישוי, טיפול או אחריות שדורשים תשומת לב.</p></div>
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-silver-200 overflow-hidden rounded-2xl border border-silver-300 bg-white shadow-sm">
+            {actions.map((a) => (
+              <li key={a.key}>
+                <button type="button" onClick={() => go('vehicle', a.vehicle.id)} className="flex min-h-[64px] w-full items-center gap-3 px-4 py-3 text-start hover:bg-silver-50">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-silver-100"><Icon name={a.icon} size={20} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Status level={a.level} />
+                      <span className="font-semibold">{a.title}</span>
+                    </div>
+                    <p className="mt-1 text-sm text-muted">{a.vehicle.nickname} · <Plate plate={a.vehicle.plate} /></p>
+                    <p className="text-sm">{a.detail}</p>
+                  </div>
+                  <Icon name="ChevronLeft" className="text-gray-500" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="cars-h">
+        <h2 id="cars-h" className="mb-3 text-lg font-bold">הרכבים שלנו</h2>
+        {vehicles.length === 0 ? (
+          <EmptyState icon="Car" title="עדיין אין רכבים במשפחה">{isAdmin ? 'לחצו על ״הוספת רכב״ והזינו מספר רכב כדי להתחיל לעקוב אחרי רישוי וטיפולים.' : 'מנהל המשפחה יכול להוסיף רכב ראשון.'}</EmptyState>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {vehicles.map((v) => {
+              const latest = latestReading(v);
+              const next = vehicleItems(v).sort(cmpItems)[0];
+              return (
+                <button key={v.id} type="button" onClick={() => go('vehicle', v.id)}
+                  className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-silver-300 bg-white text-start shadow-sm transition-shadow hover:shadow-md">
+                  <PhotoPlaceholder v={v} />
+                  <div className="flex flex-1 flex-col gap-3 p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-lg font-bold">{v.nickname}</h3>
+                        <p className="text-sm text-muted">{v.make} {v.model} · <L>{v.year}</L></p>
+                      </div>
+                      <Plate plate={v.plate} />
+                    </div>
+                    <p className="flex flex-wrap items-center gap-x-1.5 text-sm">
+                      <Icon name="Gauge" size={16} className="text-muted" />
+                      {latest ? <><L>{fmtNum(latest.km)}</L> {KM}<span className="text-muted">· עודכן <L>{fmtDate(latest.date)}</L></span></> : 'לא הוזן קילומטראז׳'}
+                    </p>
+                    <div className="mt-auto border-t border-silver-200 pt-3">
+                      <p className="text-xs font-semibold text-muted">הפעולה הבאה</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2"><Status level={next.level} /><span className="text-sm font-semibold">{next.title}</span></div>
+                      <p className="mt-1 text-sm text-muted">{next.detail}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+/* =========================================================
+   Screen 2: Add vehicle
+   ========================================================= */
+const EMPTY_FORM = { nickname: '', make: '', model: '', year: '', color: '', fuel: '', lastInspection: '', registrationExpiry: '', mileage: '' };
+function AddVehicle({ vehicles, onAdd, go, toast }) {
+  const [plate, setPlate] = useState('');
+  const [plateErr, setPlateErr] = useState('');
+  const [mode, setMode] = useState('idle'); // idle | loading | found | notfound | manual
+  const [f, setF] = useState(EMPTY_FORM);
+  const [errs, setErrs] = useState({});
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const set = (k, val) => setF((p) => ({ ...p, [k]: val }));
+  const showForm = mode === 'found' || mode === 'notfound' || mode === 'manual';
+
+  const checkPlate = () => {
+    const d = digitsOnly(plate);
+    if (d.length < 7 || d.length > 8) { setPlateErr('מספר רכב תקין כולל 7 או 8 ספרות'); return null; }
+    if (vehicles.some((v) => v.plate === d)) { setPlateErr('רכב עם המספר הזה כבר קיים במשפחה'); return null; }
+    setPlateErr('');
+    return d;
+  };
+  const lookup = () => {
+    const d = checkPlate(); if (!d) return;
+    setMode('loading');
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const hit = LOOKUP[d];
+      if (hit) {
+        setF((p) => ({ ...p, make: hit.make, model: hit.model, year: String(hit.year), color: hit.color, fuel: hit.fuel, lastInspection: fmtDate(hit.lastInspection), registrationExpiry: fmtDate(hit.registrationExpiry) }));
+        setMode('found'); toast('פרטי הרכב נמשכו מהמאגר');
+      } else { setMode('notfound'); toast('לא נמצאו פרטים למספר הזה. אפשר להזין ידנית', 'info'); }
+    }, 500);
+  };
+  const manual = () => { if (checkPlate()) { setMode('manual'); } };
+  const onPlate = (val) => { setPlate(val.replace(/[^\d-]/g, '').slice(0, 10)); setPlateErr(''); if (mode !== 'manual' && mode !== 'loading') { setMode('idle'); setF(EMPTY_FORM); setErrs({}); } };
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!showForm) { if (mode !== 'loading') lookup(); return; }
+    const d = checkPlate(); if (!d) return;
+    const er = {};
+    if (!f.nickname.trim()) er.nickname = 'תנו לרכב כינוי, למשל ״הקורולה של אבא״';
+    if (!f.make.trim()) er.make = 'הזינו יצרן';
+    if (!f.model.trim()) er.model = 'הזינו דגם';
+    const yr = parseInt(f.year, 10);
+    if (!yr || yr < 1950 || yr > new Date().getFullYear() + 1) er.year = 'הזינו שנת ייצור תקינה';
+    if (!f.color) er.color = 'בחרו צבע';
+    if (!f.fuel) er.fuel = 'בחרו סוג דלק';
+    const reg = parseDMY(f.registrationExpiry);
+    if (!reg) er.registrationExpiry = 'הזינו תאריך בפורמט DD.MM.YYYY';
+    let insp = null;
+    if (f.lastInspection.trim()) { insp = parseDMY(f.lastInspection); if (!insp) er.lastInspection = 'הזינו תאריך בפורמט DD.MM.YYYY'; else if (insp > TODAY_ISO) er.lastInspection = 'תאריך הטסט האחרון לא יכול להיות בעתיד'; }
+    if (!f.mileage) er.mileage = 'הזינו את הקילומטראז׳ הנוכחי';
+    setErrs(er);
+    if (Object.keys(er).length) { toast('יש לתקן את השדות המסומנים', 'error'); return; }
+    onAdd({
+      id: 'v' + Date.now(), nickname: f.nickname.trim(), plate: d, make: f.make.trim(), model: f.model.trim(), year: yr, color: f.color, fuel: f.fuel,
+      lastInspection: insp, registrationExpiry: reg, readings: [{ date: TODAY_ISO, km: parseInt(f.mileage, 10) }],
+      service: { intervalKm: 10000, intervalMonths: 12, lastKm: null, lastDate: null }, history: [], warranty: null, garageIds: [],
+    });
+  };
+
+  return (
+    <>
+      <ScreenHeader title="הוספת רכב" subtitle="הזינו מספר רכב ונמשוך את הפרטים" onBack={() => go('dashboard')} />
+      <form onSubmit={submit} noValidate className="mx-auto flex max-w-2xl flex-col gap-5">
+        <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
+          <Field id="plate" label="מספר רכב" error={plateErr} hint="7 או 8 ספרות, בלי רווחים">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <TextInput id="plate" ltr inputMode="numeric" autoComplete="off" placeholder="לדוגמה 1234567" value={plate} error={plateErr} onChange={(e) => onPlate(e.target.value)} className="sm:flex-1" />
+              <Button variant={showForm ? 'secondary' : 'primary'} icon={mode === 'loading' ? 'Loader2' : 'Search'} disabled={mode === 'loading'} onClick={lookup} className={mode === 'loading' ? '[&_svg]:animate-spin' : ''}>
+                {mode === 'loading' ? 'מחפש…' : 'חיפוש במאגר'}
+              </Button>
+            </div>
+          </Field>
+          {mode === 'idle' && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted">
+              <span>מספרים לדוגמה:</span>
+              {Object.keys(LOOKUP).map((p) => <button key={p} type="button" onClick={() => onPlate(p)} className="min-h-[36px] rounded-lg border border-silver-300 bg-silver-50 px-2 font-medium text-ink hover:bg-silver-100"><L>{p}</L></button>)}
+              <button type="button" onClick={manual} className="min-h-[36px] rounded-lg px-2 font-semibold text-brand underline">להזנה ידנית</button>
+            </div>
+          )}
+          {mode === 'found' && (
+            <p className="mt-3 flex items-start gap-2 rounded-xl border border-green-300 bg-green-50 p-3 text-sm font-medium text-green-900"><Icon name="ShieldCheck" size={18} className="mt-0.5" />נמשך ממאגר משרד התחבורה – ניתן לערוך</p>
+          )}
+          {mode === 'notfound' && (
+            <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900"><Icon name="Info" size={18} className="mt-0.5" />לא מצאנו את הרכב הזה במאגר ההדגמה. זה קורה, ואפשר להמשיך: מלאו את הפרטים ידנית למטה.</p>
+          )}
+        </section>
+
+        {showForm && (
+          <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="mb-4 text-base font-bold">פרטי הרכב</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2"><Field id="nickname" label="כינוי" error={errs.nickname}><TextInput id="nickname" value={f.nickname} error={errs.nickname} onChange={(e) => set('nickname', e.target.value)} placeholder="למשל: הקורולה של אבא" /></Field></div>
+              <Field id="make" label="יצרן" error={errs.make}><TextInput id="make" value={f.make} error={errs.make} onChange={(e) => set('make', e.target.value)} /></Field>
+              <Field id="model" label="דגם" error={errs.model}><TextInput id="model" value={f.model} error={errs.model} onChange={(e) => set('model', e.target.value)} /></Field>
+              <Field id="year" label="שנת ייצור" error={errs.year}><NumInput id="year" max={4} value={f.year} error={errs.year} onChange={(x) => set('year', x)} /></Field>
+              <Field id="color" label="צבע" error={errs.color}><Select id="color" value={f.color} error={errs.color} onChange={(x) => set('color', x)} options={COLORS} /></Field>
+              <Field id="fuel" label="סוג דלק" error={errs.fuel}><Select id="fuel" value={f.fuel} error={errs.fuel} onChange={(x) => set('fuel', x)} options={FUELS} /></Field>
+              <Field id="mileage" label={`קילומטראז׳ נוכחי (${KM})`} error={errs.mileage}><NumInput id="mileage" value={f.mileage} error={errs.mileage} onChange={(x) => set('mileage', x)} /></Field>
+              <Field id="lastInspection" label="טסט אחרון" error={errs.lastInspection} hint="אפשר להשאיר ריק"><DateInput id="lastInspection" value={f.lastInspection} error={errs.lastInspection} onChange={(x) => set('lastInspection', x)} /></Field>
+              <Field id="registrationExpiry" label="תוקף רישוי" error={errs.registrationExpiry}><DateInput id="registrationExpiry" value={f.registrationExpiry} error={errs.registrationExpiry} onChange={(x) => set('registrationExpiry', x)} /></Field>
+            </div>
+          </section>
+        )}
+        {showForm && (
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button variant="neutral" onClick={() => go('dashboard')}>ביטול</Button>
+            <Button type="submit" icon="Check" className="sm:min-w-[160px]">שמירת רכב</Button>
+          </div>
+        )}
+      </form>
+    </>
+  );
+}
+
+/* =========================================================
+   Screen 3: Vehicle details
+   ========================================================= */
+function MileageModal({ v, onClose, onSave }) {
+  const latest = latestReading(v);
+  const [date, setDate] = useState(fmtDate(TODAY_ISO));
+  const [km, setKm] = useState('');
+  const [er, setEr] = useState({});
+  const submit = (e) => {
+    e.preventDefault();
+    const x = {}; const iso = parseDMY(date); const n = parseInt(km, 10);
+    if (!iso) x.date = 'הזינו תאריך בפורמט DD.MM.YYYY'; else if (iso > TODAY_ISO) x.date = 'התאריך לא יכול להיות בעתיד';
+    if (!km) x.km = 'הזינו את הקילומטראז׳ מלוח השעונים';
+    else if (latest && iso && iso >= latest.date && n < latest.km) x.km = `הערך נמוך מהקריאה האחרונה (${fmtNum(latest.km)} ${KM}). בדקו את המספר`;
+    else if (latest && iso && iso < latest.date && n > latest.km) x.km = 'בתאריך מוקדם יותר הקילומטראז׳ לא יכול להיות גבוה מהקריאה האחרונה';
+    setEr(x);
+    if (Object.keys(x).length) return;
+    onSave({ date: iso, km: n });
+  };
+  return (
+    <Modal title="עדכון קילומטראז׳" onClose={onClose}
+      footer={<><Button variant="neutral" onClick={onClose}>ביטול</Button><Button type="submit" form="mileage-form" icon="Check">שמירה</Button></>}>
+      <form id="mileage-form" onSubmit={submit} noValidate className="flex flex-col gap-4">
+        <Field id="m-km" label={`קילומטראז׳ (${KM})`} error={er.km} hint={latest ? `קריאה אחרונה: ${fmtNum(latest.km)} ${KM}, ${fmtDate(latest.date)}` : undefined}>
+          <NumInput id="m-km" value={km} error={er.km} onChange={setKm} />
+        </Field>
+        <Field id="m-date" label="תאריך הקריאה" error={er.date}><DateInput id="m-date" value={date} error={er.date} onChange={setDate} /></Field>
+      </form>
+    </Modal>
+  );
+}
+
+const SERVICE_TYPES = ['טיפול תקופתי', 'החלפת צמיגים', 'החלפת בלמים', 'מבחן רישוי (טסט)', 'תיקון', 'אחר'];
+function ServiceModal({ v, garages, onClose, onSave, entry }) {
+  const editing = !!entry;
+  const latest = latestReading(v);
+  const [date, setDate] = useState(fmtDate(entry ? entry.date : TODAY_ISO));
+  const [km, setKm] = useState(entry ? String(entry.km) : '');
+  const [type, setType] = useState(entry ? entry.type : 'טיפול תקופתי');
+  const [garage, setGarage] = useState(entry ? entry.garage || '' : '');
+  const [cost, setCost] = useState(entry && entry.cost != null ? String(entry.cost) : '');
+  const [notes, setNotes] = useState(entry ? entry.notes || '' : '');
+  const [er, setEr] = useState({});
+  const mine = garages.filter((g) => v.garageIds.includes(g.id));
+  const others = garages.filter((g) => !v.garageIds.includes(g.id));
+  const submit = (e) => {
+    e.preventDefault();
+    const x = {}; const iso = parseDMY(date); const n = parseInt(km, 10);
+    if (!iso) x.date = 'הזינו תאריך בפורמט DD.MM.YYYY'; else if (iso > TODAY_ISO) x.date = 'התאריך לא יכול להיות בעתיד';
+    if (!km) x.km = 'הזינו את הקילומטראז׳ בעת הטיפול';
+    else if (!editing && latest && iso && iso >= latest.date && n < latest.km) x.km = `הערך נמוך מהקריאה האחרונה (${fmtNum(latest.km)} ${KM}). בדקו את המספר`;
+    if (!editing && !garage.trim()) x.garage = 'בחרו מוסך או הקלידו שם';
+    if (editing && !type.trim()) x.type = 'הזינו סוג טיפול';
+    setEr(x);
+    if (Object.keys(x).length) return;
+    onSave({ date: iso, km: n, type: type.trim(), garage: garage.trim(), cost: cost === '' ? null : parseInt(cost, 10), notes: notes.trim() });
+  };
+  return (
+    <Modal title={editing ? `עריכת טיפול · ${v.nickname}` : `בוצע טיפול · ${v.nickname}`} onClose={onClose}
+      footer={<><Button variant="neutral" onClick={onClose}>ביטול</Button><Button type="submit" form="service-form" icon="Check">{editing ? 'שמירת שינויים' : 'שמירת טיפול'}</Button></>}>
+      <form id="service-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
+        {editing && (
+          <div className="sm:col-span-2">
+            <Field id="s-type" label="סוג הטיפול" error={er.type}>
+              <TextInput id="s-type" list="type-list" autoComplete="off" value={type} error={er.type} onChange={(e) => setType(e.target.value)} />
+              <datalist id="type-list">{SERVICE_TYPES.map((t) => <option key={t} value={t} />)}</datalist>
+            </Field>
+          </div>
+        )}
+        <Field id="s-date" label="תאריך הטיפול" error={er.date}><DateInput id="s-date" value={date} error={er.date} onChange={setDate} /></Field>
+        <Field id="s-km" label={`קילומטראז׳ (${KM})`} error={er.km} hint={latest ? `קריאה אחרונה: ${fmtNum(latest.km)} ${KM}` : undefined}><NumInput id="s-km" value={km} error={er.km} onChange={setKm} /></Field>
+        <div className="sm:col-span-2">
+          <Field id="s-garage" label="מוסך" error={er.garage}>
+            <TextInput id="s-garage" list="garage-list" autoComplete="off" value={garage} error={er.garage} onChange={(e) => setGarage(e.target.value)} placeholder="בחרו מהרשימה או הקלידו" />
+            <datalist id="garage-list">{[...mine, ...others].map((g) => <option key={g.id} value={g.name} />)}</datalist>
+          </Field>
+        </div>
+        <Field id="s-cost" label="עלות (₪)" hint="אפשר להשאיר ריק"><NumInput id="s-cost" max={6} value={cost} onChange={setCost} /></Field>
+        <div className="sm:col-span-2">
+          <Field id="s-notes" label="הערות"><textarea id="s-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={`${inputCls(false)} py-2`} placeholder="למשל: החלפת שמן ופילטרים" /></Field>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function PickGaragesModal({ v, garages, onClose, onSave }) {
+  const [sel, setSel] = useState(v.garageIds);
+  const toggle = (id) => setSel((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  return (
+    <Modal title="בחירת מוסכים מועדפים" onClose={onClose}
+      footer={<><Button variant="neutral" onClick={onClose}>ביטול</Button><Button icon="Check" onClick={() => onSave(sel)}>שמירה</Button></>}>
+      {garages.length === 0 ? <EmptyState icon="MapPin" title="אין מוסכים ברשימת המשפחה">הוסיפו מוסך במסך ״מוסכים״ ואז חזרו לכאן.</EmptyState> : (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">מוסכים</legend>
+          {garages.map((g) => (
+            <label key={g.id} className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-xl border border-silver-300 px-3 py-2 hover:bg-silver-50">
+              <input type="checkbox" checked={sel.includes(g.id)} onChange={() => toggle(g.id)} className="h-5 w-5 accent-blue-700" />
+              <span><span className="block font-semibold">{g.name}</span><span className="block text-sm text-muted">{g.address}</span></span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+    </Modal>
+  );
+}
+
+function Row({ label, children }) {
+  return <div className="flex items-start justify-between gap-3 py-2"><dt className="text-sm text-muted">{label}</dt><dd className="text-end text-sm font-semibold">{children}</dd></div>;
+}
+
+function VehicleScreen({ v, garages, go, toast, updateVehicle, deleteVehicle, isAdmin }) {
+  const [modal, setModal] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const latest = latestReading(v);
+  const age = odoAge(v);
+  const stale = age === null || age > 60;
+  const si = serviceInfo(v);
+  const regDays = daysFromToday(v.registrationExpiry);
+  const wi = warrantyInfo(v);
+  const myGarages = garages.filter((g) => v.garageIds.includes(g.id));
+  const history = [...v.history].sort((a, b) => b.date.localeCompare(a.date) || b.km - a.km);
+  const readings = [...v.readings].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+
+  const saveMileage = ({ date, km }) => {
+    updateVehicle(v.id, (x) => ({ ...x, readings: [...x.readings, { date, km }] }));
+    setModal(null); toast(`הקילומטראז׳ עודכן ל־${fmtNum(km)} ${KM}`);
+  };
+  const saveService = ({ date, km, garage, cost, notes }) => {
+    const newer = !v.service.lastDate || date >= v.service.lastDate;
+    updateVehicle(v.id, (x) => {
+      const entry = { id: 'h' + Date.now(), date, km, type: 'טיפול תקופתי', garage, cost, notes };
+      const lat = latestReading(x);
+      return {
+        ...x,
+        history: [entry, ...x.history],
+        service: newer ? { ...x.service, lastKm: km, lastDate: date } : x.service,
+        readings: !lat || km > lat.km ? [...x.readings, { date, km }] : x.readings,
+      };
+    });
+    setModal(null);
+    if (newer) toast(`הטיפול נשמר. הטיפול הבא: ב־${fmtNum(km + v.service.intervalKm)} ${KM} או עד ${fmtDate(addMonths(date, v.service.intervalMonths))}, המוקדם מביניהם`);
+    else toast('הטיפול נוסף להיסטוריה. הטיפול הבא לא השתנה, כי קיים טיפול חדש יותר', 'info');
+  };
+  const saveEdit = (data) => {
+    const id = editing.id;
+    updateVehicle(v.id, (x) => {
+      const history = x.history.map((h) => (h.id === id ? { ...h, ...data } : h));
+      const lat = latestReading(x);
+      return { ...x, history, service: recalcService(history, x.service), readings: !lat || data.km > lat.km ? [...x.readings, { date: data.date, km: data.km }] : x.readings };
+    });
+    setEditing(null); toast('הטיפול עודכן. חישוב הטיפול הבא התעדכן');
+  };
+  const deleteEntry = (h) => {
+    updateVehicle(v.id, (x) => { const history = x.history.filter((e) => e.id !== h.id); return { ...x, history, service: recalcService(history, x.service) }; });
+    toast(`הטיפול מ־${fmtDate(h.date)} נמחק`, 'info', {
+      duration: 9000,
+      action: { label: 'ביטול', onClick: () => { updateVehicle(v.id, (x) => { const history = [h, ...x.history]; return { ...x, history, service: recalcService(history, x.service) }; }); toast('המחיקה בוטלה והטיפול הוחזר'); } },
+    });
+  };
+  const undoRenew = () => {
+    if (!v.regUndo) return;
+    updateVehicle(v.id, (x) => ({ ...x, registrationExpiry: x.regUndo, regUndo: null }));
+    toast(`החידוש בוטל. תוקף הרישוי חזר ל־${fmtDate(v.regUndo)}`, 'info');
+  };
+  const renew = () => {
+    const prev = v.registrationExpiry;
+    const base = prev < TODAY_ISO ? TODAY_ISO : prev;
+    const next = addMonths(base, 12);
+    updateVehicle(v.id, (x) => ({ ...x, registrationExpiry: next, regUndo: prev, regUndoAt: TODAY_ISO }));
+    toast(`הרישוי סומן כחודש. תוקף חדש: ${fmtDate(next)}`, 'success', {
+      duration: 9000,
+      action: { label: 'ביטול', onClick: () => { updateVehicle(v.id, (x) => ({ ...x, registrationExpiry: prev, regUndo: null })); toast(`החידוש בוטל. תוקף הרישוי חזר ל־${fmtDate(prev)}`, 'info'); } },
+    });
+  };
+
+  return (
+    <>
+      <ScreenHeader title={v.nickname} onBack={() => go('dashboard')}
+        subtitle={<span className="flex flex-wrap items-center gap-2">{v.make} {v.model} · <L>{v.year}</L> · {v.color} · {v.fuel} <Plate plate={v.plate} /></span>}>
+        <Button icon="Wrench" onClick={() => setModal('service')}>בוצע טיפול</Button>
+        <Button variant="secondary" icon="Gauge" onClick={() => setModal('mileage')}>עדכון קילומטראז׳</Button>
+        <Menu items={[
+          ...(regDays <= 60 ? [{ label: 'סימון רישוי כחודש', icon: 'RefreshCw', onClick: renew }] : []),
+          ...(v.regUndo && dayDiff(v.regUndoAt, TODAY_ISO) <= 30 ? [{ label: `ביטול החידוש האחרון (חזרה ל־${fmtDate(v.regUndo)})`, icon: 'Undo2', onClick: undoRenew }] : []),
+          { label: 'בחירת מוסכים מועדפים', icon: 'MapPin', onClick: () => setModal('garages') },
+          ...(isAdmin ? [{ label: 'מחיקת הרכב', icon: 'Trash2', danger: true, onClick: () => setModal('delete') }] : []),
+        ]} />
+      </ScreenHeader>
+
+      {stale && (
+        <div role="alert" className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          <Icon name="AlertTriangle" size={22} className="mt-0.5" />
+          <div className="flex-1">
+            <p className="font-bold">{age === null ? 'עדיין לא הוזן קילומטראז׳' : `הקריאה האחרונה בת ${age} ימים`}</p>
+            <p className="text-sm">עדכנו את הקילומטראז׳ כדי שהתזכורות לטיפול יהיו מדויקות.</p>
+            <button type="button" onClick={() => setModal('mileage')} className="mt-1 min-h-[44px] font-semibold underline">עדכון עכשיו</button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Section icon="Wrench" title="עבודות קרובות">
+          {!si ? (
+            <EmptyState icon="Wrench" title="עדיין לא תועד טיפול">לחצו על ״בוצע טיפול״ כדי לתעד טיפול אחרון. מיד אחר כך נחשב את הטיפול הבא, כל {fmtNum(v.service.intervalKm)} {KM} או {v.service.intervalMonths} חודשים.</EmptyState>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2"><Status level={si.level} /><span className="text-sm font-semibold">טיפול תקופתי כל <L>{fmtNum(v.service.intervalKm)}</L> {KM}</span></div>
+              <ul className="flex flex-col gap-2">
+                <li className={`rounded-xl border p-3 ${si.first === 'km' ? 'border-brand bg-brand-50' : 'border-silver-300'}`}>
+                  <div className="flex items-center justify-between gap-2"><span className="text-sm text-muted">לפי קילומטראז׳</span>{si.first === 'km' && <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">קודם</span>}</div>
+                  <p className="font-bold"><L>{fmtNum(si.nextKm)}</L> {KM}</p>
+                  <p className="text-sm text-muted">{si.kmLeft > 0 ? <>נותרו <L>{fmtNum(si.kmLeft)}</L> {KM}, בערך {si.kmDays} ימים בקצב הנסיעה</> : <>חריגה של <L>{fmtNum(-si.kmLeft)}</L> {KM}</>}</p>
+                </li>
+                <li className={`rounded-xl border p-3 ${si.first === 'date' ? 'border-brand bg-brand-50' : 'border-silver-300'}`}>
+                  <div className="flex items-center justify-between gap-2"><span className="text-sm text-muted">לפי תאריך</span>{si.first === 'date' && <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-white">קודם</span>}</div>
+                  <p className="font-bold"><L>{fmtDate(si.nextDate)}</L></p>
+                  <p className="text-sm text-muted">{si.daysLeft >= 0 ? `בעוד ${si.daysLeft} ימים` : `באיחור של ${-si.daysLeft} ימים`}</p>
+                </li>
+              </ul>
+              <p className="mt-2 text-xs text-muted">הטיפול הבא נקבע לפי המוקדם מביניהם. טיפול אחרון: <L>{fmtNum(v.service.lastKm)}</L> {KM}, <L>{fmtDate(v.service.lastDate)}</L>.</p>
+            </>
+          )}
+        </Section>
+
+        <Section icon="FileCheck" title="רישוי">
+          <div className="mb-2 flex flex-wrap items-center gap-2"><Status level={dateLevel(regDays)} /><span className="text-sm text-muted">{regDetail(regDays)}</span></div>
+          <dl className="divide-y divide-silver-200">
+            <Row label="תוקף רישוי"><L>{fmtDate(v.registrationExpiry)}</L></Row>
+            <Row label="טסט אחרון"><L>{fmtDate(v.lastInspection)}</L></Row>
+          </dl>
+        </Section>
+
+        <Section icon="Gauge" title="קילומטראז׳">
+          {latest ? (
+            <>
+              <p className="text-3xl font-bold tabular-nums"><L>{fmtNum(latest.km)}</L> <span className="text-base font-semibold text-muted">{KM}</span></p>
+              <p className="text-sm text-muted">עודכן ב־<L>{fmtDate(latest.date)}</L>{age !== null && ` · לפני ${age} ימים`}</p>
+              {readings.length > 1 && (
+                <ul className="mt-3 divide-y divide-silver-200 border-t border-silver-200">
+                  {readings.map((r, i) => <li key={r.date + r.km + i} className="flex justify-between py-2 text-sm"><span className="text-muted"><L>{fmtDate(r.date)}</L></span><span className="font-semibold"><L>{fmtNum(r.km)}</L> {KM}</span></li>)}
+                </ul>
+              )}
+            </>
+          ) : <EmptyState icon="Gauge" title="לא הוזן קילומטראז׳">השתמשו ב״עדכון קילומטראז׳״ כדי להתחיל.</EmptyState>}
+        </Section>
+
+        <Section icon="ShieldCheck" title="אחריות" className="md:order-4">
+          {!wi ? <EmptyState icon="ShieldCheck" title="לא הוגדרה אחריות לרכב הזה" /> : (
+            <>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                {wi.expired ? <span className="inline-flex items-center gap-1 rounded-full border border-gray-400 bg-silver-100 px-2.5 py-0.5 text-xs font-bold text-gray-800"><Icon name="Info" size={14} />הסתיימה</span> : <Status level={wi.level} />}
+                <span className="text-sm font-semibold">{v.warranty.name}</span>
+              </div>
+              <dl className="divide-y divide-silver-200">
+                <Row label="ספק">{v.warranty.provider}</Row>
+                <Row label="עד תאריך"><L>{fmtDate(v.warranty.until)}</L></Row>
+                <Row label="או עד קילומטראז׳"><L>{fmtNum(v.warranty.untilKm)}</L> {KM}</Row>
+              </dl>
+              {!wi.expired && <p className="mt-2 text-xs text-muted">האחריות מסתיימת בראשון מביניהם: נותרו {wi.days} ימים או <L>{fmtNum(wi.kmLeft)}</L> {KM}.</p>}
+            </>
+          )}
+        </Section>
+
+        <Section icon="MapPin" title="מוסכים מועדפים" className="md:order-5 md:col-span-2"
+          action={<Button variant="ghost" onClick={() => setModal('garages')}>בחירת מוסכים</Button>}>
+          {myGarages.length === 0 ? <EmptyState icon="MapPin" title="לא נבחרו מוסכים מועדפים">בחרו מוסכים מהרשימה המשפחתית כדי להתקשר או לנווט אליהם מכאן.</EmptyState> : (
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {myGarages.map((g) => (
+                <li key={g.id} className="flex flex-col gap-3 rounded-xl border border-silver-300 p-3">
+                  <div><p className="font-bold">{g.name}</p><p className="text-sm text-muted">{g.address}</p><p className="text-sm"><L>{g.phone}</L></p></div>
+                  <GarageActions g={g} toast={toast} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section icon="ClipboardList" title="היסטוריית טיפולים" className="md:order-6 md:col-span-2">
+          {history.length === 0 ? <EmptyState icon="ClipboardList" title="אין עדיין טיפולים בהיסטוריה">אחרי ״בוצע טיפול״ יופיע כאן רישום עם תאריך, מוסך ועלות.</EmptyState> : (
+            <ul className="divide-y divide-silver-200">
+              {history.map((h) => (
+                <li key={h.id} className="flex gap-3 py-3">
+                  <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-silver-100"><Icon name="Wrench" size={18} /></div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="font-semibold">{h.type}</span><span className="text-sm text-muted"><L>{fmtDate(h.date)}</L></span></div>
+                    <p className="text-sm text-muted"><L>{fmtNum(h.km)}</L> {KM}{h.garage ? ` · ${h.garage}` : ''}{h.cost != null ? <> · <L>₪{fmtNum(h.cost)}</L></> : null}</p>
+                    {h.notes && <p className="mt-1 text-sm">{h.notes}</p>}
+                  </div>
+                  <Menu label={`פעולות עבור ${h.type} מ־${fmtDate(h.date)}`} items={[
+                    { label: 'עריכת טיפול', icon: 'Pencil', onClick: () => setEditing(h) },
+                    { label: 'מחיקת טיפול', icon: 'Trash2', danger: true, onClick: () => deleteEntry(h) },
+                  ]} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      </div>
+
+      {modal === 'mileage' && <MileageModal v={v} onClose={() => setModal(null)} onSave={saveMileage} />}
+      {modal === 'service' && <ServiceModal v={v} garages={garages} onClose={() => setModal(null)} onSave={saveService} />}
+      {editing && <ServiceModal v={v} garages={garages} entry={editing} onClose={() => setEditing(null)} onSave={saveEdit} />}
+      {modal === 'garages' && <PickGaragesModal v={v} garages={garages} onClose={() => setModal(null)} onSave={(ids) => { updateVehicle(v.id, (x) => ({ ...x, garageIds: ids })); setModal(null); toast('המוסכים המועדפים עודכנו'); }} />}
+      {modal === 'delete' && <ConfirmModal title="מחיקת רכב" danger confirmLabel="מחיקה" onClose={() => setModal(null)} onConfirm={() => deleteVehicle(v)}
+        body={`למחוק את ״${v.nickname}״? ההיסטוריה והקילומטראז׳ יימחקו ולא ניתן לשחזר אותם.`} />}
+    </>
+  );
+}
+
+/* =========================================================
+   Screen 4: Garages
+   ========================================================= */
+function AddGarageModal({ onClose, onSave }) {
+  const [g, setG] = useState({ name: '', city: '', address: '', phone: '' });
+  const [er, setEr] = useState({});
+  const set = (k, val) => setG((p) => ({ ...p, [k]: val }));
+  const submit = (e) => {
+    e.preventDefault();
+    const x = {};
+    if (!g.name.trim()) x.name = 'הזינו שם מוסך';
+    if (!g.city.trim()) x.city = 'הזינו עיר';
+    if (!g.address.trim()) x.address = 'הזינו כתובת לניווט';
+    const ph = g.phone.replace(/\D/g, '');
+    if (!/^0\d{8,9}$/.test(ph)) x.phone = 'הזינו מספר טלפון ישראלי, למשל 03-555-0100';
+    setEr(x);
+    if (Object.keys(x).length) return;
+    onSave({ id: 'g' + Date.now(), name: g.name.trim(), city: g.city.trim(), address: g.address.trim(), phone: g.phone.trim() });
+  };
+  return (
+    <Modal title="הוספת מוסך מועדף" onClose={onClose}
+      footer={<><Button variant="neutral" onClick={onClose}>ביטול</Button><Button type="submit" form="garage-form" icon="Check">שמירת מוסך</Button></>}>
+      <form id="garage-form" onSubmit={submit} noValidate className="grid gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2"><Field id="g-name" label="שם המוסך" error={er.name}><TextInput id="g-name" value={g.name} error={er.name} onChange={(e) => set('name', e.target.value)} /></Field></div>
+        <Field id="g-city" label="עיר" error={er.city}><TextInput id="g-city" value={g.city} error={er.city} onChange={(e) => set('city', e.target.value)} /></Field>
+        <Field id="g-phone" label="טלפון" error={er.phone}><TextInput id="g-phone" ltr inputMode="tel" value={g.phone} error={er.phone} onChange={(e) => set('phone', e.target.value.replace(/[^\d-]/g, '').slice(0, 12))} /></Field>
+        <div className="sm:col-span-2"><Field id="g-address" label="כתובת" error={er.address}><TextInput id="g-address" value={g.address} error={er.address} onChange={(e) => set('address', e.target.value)} /></Field></div>
+      </form>
+    </Modal>
+  );
+}
+
+function Garages({ garages, vehicles, setGarages, setVehicles, toast }) {
+  const [city, setCity] = useState('');
+  const [cityErr, setCityErr] = useState('');
+  const [modal, setModal] = useState(null);
+  const [del, setDel] = useState(null);
+  const linkRef = useRef(null);
+  const search = (e) => {
+    e.preventDefault();
+    if (!city.trim()) { setCityErr('הזינו שם עיר כדי לחפש מוסך קרוב'); return; }
+    setCityErr('');
+    if (linkRef.current) linkRef.current.click();
+  };
+  return (
+    <>
+      <ScreenHeader title="מוסכים" subtitle={`${garages.length} ${plural(garages.length, 'מוסך מועדף', 'מוסכים מועדפים')}`}>
+        <Menu items={[{ label: 'הוספת מוסך מועדף', icon: 'Plus', onClick: () => setModal('add') }]} />
+      </ScreenHeader>
+
+      <section className="mb-6 rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="find-h">
+        <h2 id="find-h" className="mb-3 flex items-center gap-2 text-base font-bold"><Icon name="Search" size={20} className="text-brand" />חיפוש מוסך קרוב</h2>
+        <form onSubmit={search} noValidate>
+          <Field id="city" label="עיר" error={cityErr} hint="נפתח חיפוש ב־Google Maps בלשונית חדשה">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <TextInput id="city" value={city} error={cityErr} onChange={(e) => { setCity(e.target.value); setCityErr(''); }} placeholder="למשל: פתח תקווה" className="sm:flex-1" />
+              <Button type="submit" icon="MapPin">מצא מוסך קרוב</Button>
+              <a ref={linkRef} href={mapsSearch(city.trim() || 'קרוב אליי')} target="_blank" rel="noopener noreferrer" className="hidden" tabIndex={-1} aria-hidden="true" onClick={() => toast(`פותח חיפוש מוסכים ב${city.trim()}`, 'info')}>חיפוש</a>
+            </div>
+          </Field>
+        </form>
+      </section>
+
+      <h2 className="mb-3 text-lg font-bold">המוסכים שלנו</h2>
+      {garages.length === 0 ? (
+        <EmptyState icon="MapPin" title="עדיין אין מוסכים מועדפים">בחרו ״הוספת מוסך מועדף״ בתפריט ⋯ למעלה, או חפשו מוסך קרוב.</EmptyState>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {garages.map((g) => {
+            const users = vehicles.filter((v) => v.garageIds.includes(g.id));
+            return (
+              <article key={g.id} className="flex min-w-0 flex-col gap-3 rounded-2xl border border-silver-300 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0"><h3 className="break-words text-lg font-bold">{g.name}</h3><p className="text-sm text-muted">{g.address}</p></div>
+                  <Menu label={`פעולות עבור ${g.name}`} items={[{ label: 'הסרה מהמועדפים', icon: 'Trash2', danger: true, onClick: () => setDel(g) }]} />
+                </div>
+                <p className="flex items-center gap-2 text-sm font-semibold"><Icon name="Phone" size={16} className="text-muted" /><L>{g.phone}</L></p>
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  {users.length === 0 ? <span className="text-muted">לא משויך לרכב</span> : users.map((v) => <span key={v.id} className="rounded-full bg-silver-100 px-2 py-0.5 font-medium">{v.nickname}</span>)}
+                </div>
+                <div className="mt-auto"><GarageActions g={g} toast={toast} /></div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {modal === 'add' && <AddGarageModal onClose={() => setModal(null)} onSave={(g) => { setGarages((x) => [...x, g]); setModal(null); toast(`״${g.name}״ נוסף למוסכים המועדפים`); }} />}
+      {del && <ConfirmModal title="הסרת מוסך" danger confirmLabel="הסרה" onClose={() => setDel(null)}
+        body={`להסיר את ״${del.name}״ מהמוסכים המועדפים? הוא יוסר גם מהרכבים שבחרו בו. היסטוריית הטיפולים לא תשתנה.`}
+        onConfirm={() => { setGarages((x) => x.filter((g) => g.id !== del.id)); setVehicles((vs) => vs.map((v) => ({ ...v, garageIds: v.garageIds.filter((id) => id !== del.id) }))); toast(`״${del.name}״ הוסר`); setDel(null); }} />}
+    </>
+  );
+}
+
+/* =========================================================
+   Screen 5: Family settings
+   ========================================================= */
+const ROLE = { admin: 'מנהל', member: 'חבר משפחה' };
+function Settings({ members, setMembers, invites, setInvites, reminders, setReminders, toast, isAdmin, currentId }) {
+  const [email, setEmail] = useState('');
+  const [emailErr, setEmailErr] = useState('');
+  const [adminErr, setAdminErr] = useState('');
+  const [confirm, setConfirm] = useState(null);
+  const admins = members.filter((m) => m.role === 'admin').length;
+  const LAST_ADMIN = 'לא ניתן להסיר או להוריד בדרגה את המנהל האחרון. מנו קודם מנהל נוסף ואז נסו שוב.';
+
+  const invite = (e) => {
+    e.preventDefault();
+    const val = email.trim().toLowerCase();
+    if (!val) { setEmailErr('הזינו כתובת אימייל'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(val)) { setEmailErr('כתובת האימייל לא תקינה. בדקו שיש בה @ ושם דומיין'); return; }
+    if (members.some((m) => m.email === val) || invites.some((i) => i.email === val)) { setEmailErr('כתובת הזאת כבר חברה במשפחה או שהוזמנה'); return; }
+    setInvites((x) => [...x, { id: 'i' + Date.now(), email: val }]);
+    setEmail(''); setEmailErr('');
+    toast(`ההזמנה נשלחה אל ${val} (הדגמה: לא נשלח אימייל אמיתי)`);
+  };
+  const toggleRole = (m) => {
+    setAdminErr('');
+    if (m.role === 'admin' && admins === 1) { setAdminErr(LAST_ADMIN); toast('לא ניתן להוריד בדרגה את המנהל האחרון', 'error'); return; }
+    setMembers((x) => x.map((y) => (y.id === m.id ? { ...y, role: y.role === 'admin' ? 'member' : 'admin' } : y)));
+    toast(`${m.name} הוגדר/ה כ${m.role === 'admin' ? ROLE.member : ROLE.admin}`);
+  };
+  const askRemove = (m) => {
+    setAdminErr('');
+    if (m.role === 'admin' && admins === 1) { setAdminErr(LAST_ADMIN); toast('לא ניתן להסיר את המנהל האחרון', 'error'); return; }
+    if (m.id === currentId) { setAdminErr('לא ניתן להסיר את המשתמש המחובר מהדגמה זו.'); toast('לא ניתן להסיר את המשתמש המחובר', 'error'); return; }
+    setConfirm(m);
+  };
+  const setRem = (k, val, label) => { setReminders((r) => ({ ...r, [k]: val })); toast(`התזכורת ${label} ${val ? 'הופעלה' : 'כובתה'}`); };
+
+  return (
+    <>
+      <ScreenHeader title="הגדרות משפחה" subtitle="משפחת כהן" />
+      {!isAdmin && (
+        <p className="mb-4 flex items-start gap-2 rounded-xl border border-silver-300 bg-white p-3 text-sm font-medium"><Icon name="Info" size={18} className="mt-0.5" />מצב צפייה בלבד. רק מנהל יכול להזמין, להסיר, לשנות תפקידים ולשנות תזכורות.</p>
+      )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Section icon="Users" title="חברי המשפחה" className="lg:col-span-2">
+          {adminErr && <p role="alert" className="mb-3 flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-800"><Icon name="AlertTriangle" size={18} className="mt-0.5" />{adminErr}</p>}
+          <ul className="divide-y divide-silver-200">
+            {members.map((m) => (
+              <li key={m.id} className="flex items-center gap-3 py-3">
+                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-50 font-bold text-brand">{m.name.slice(0, 1)}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">{m.name}{m.id === currentId && <span className="ms-2 text-xs font-medium text-muted">(את/ה)</span>}</p>
+                  <p className="truncate text-sm text-muted"><L>{m.email}</L></p>
+                </div>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold ${m.role === 'admin' ? 'border-brand bg-brand-50 text-brand' : 'border-silver-300 bg-silver-50 text-ink'}`}>
+                  <Icon name={m.role === 'admin' ? 'Shield' : 'Users'} size={14} />{ROLE[m.role]}
+                </span>
+                {isAdmin && <Menu label={`פעולות עבור ${m.name}`} items={[
+                  { label: m.role === 'admin' ? 'הפיכה לחבר רגיל' : 'הפיכה למנהל', icon: 'Shield', onClick: () => toggleRole(m) },
+                  { label: 'הסרה מהמשפחה', icon: 'Trash2', danger: true, onClick: () => askRemove(m) },
+                ]} />}
+              </li>
+            ))}
+          </ul>
+        </Section>
+
+        {isAdmin && <Section icon="UserPlus" title="הזמנת בן משפחה">
+          <form onSubmit={invite} noValidate className="flex flex-col gap-3">
+            <Field id="invite-email" label="כתובת אימייל" error={emailErr} hint="נשלח קישור הצטרפות. בהדגמה לא נשלח אימייל אמיתי">
+              <TextInput id="invite-email" ltr type="email" autoComplete="off" placeholder="name@example.com" value={email} error={emailErr} onChange={(e) => { setEmail(e.target.value); setEmailErr(''); }} />
+            </Field>
+            <Button type="submit" icon="Mail" className="self-start">הזמנת בן משפחה</Button>
+          </form>
+          <h3 className="mb-1 mt-5 text-sm font-bold">הזמנות ממתינות</h3>
+          {invites.length === 0 ? <p className="rounded-xl border border-dashed border-silver-300 bg-silver-50 p-3 text-sm text-muted">אין הזמנות ממתינות.</p> : (
+            <ul className="divide-y divide-silver-200">
+              {invites.map((i) => (
+                <li key={i.id} className="flex items-center gap-3 py-2">
+                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold"><L>{i.email}</L></p></div>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-900"><Icon name="Clock" size={14} />ממתינה</span>
+                  <Menu label={`פעולות עבור ${i.email}`} items={[{ label: 'ביטול הזמנה', icon: 'X', danger: true, onClick: () => { setInvites((x) => x.filter((y) => y.id !== i.id)); toast('ההזמנה בוטלה'); } }]} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>}
+
+        <Section icon="Bell" title="תזכורות רישוי">
+          <p className="mb-3 text-sm text-muted">התזכורות נשלחות לכל חברי המשפחה לפני שהרישוי פג.</p>
+          <ul className="divide-y divide-silver-200">
+            <li className="flex items-center justify-between gap-3 py-3"><label htmlFor="rem30" className="font-semibold">30 ימים לפני פקיעת הרישוי</label><Switch id="rem30" disabled={!isAdmin} label="תזכורת 30 ימים לפני פקיעת רישוי" checked={reminders.d30} onChange={(x) => setRem('d30', x, 'של 30 ימים')} /></li>
+            <li className="flex items-center justify-between gap-3 py-3"><label htmlFor="rem7" className="font-semibold">7 ימים לפני פקיעת הרישוי</label><Switch id="rem7" disabled={!isAdmin} label="תזכורת 7 ימים לפני פקיעת רישוי" checked={reminders.d7} onChange={(x) => setRem('d7', x, 'של 7 ימים')} /></li>
+          </ul>
+          {!reminders.d30 && !reminders.d7 && <p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-900"><Icon name="AlertTriangle" size={18} className="mt-0.5" />כל התזכורות כבויות. לא נתריע לפני שהרישוי פג.</p>}
+        </Section>
+      </div>
+
+      {confirm && <ConfirmModal title="הסרת בן משפחה" danger confirmLabel="הסרה" onClose={() => setConfirm(null)}
+        body={`להסיר את ${confirm.name} מהמשפחה? לא תהיה לו/ה יותר גישה לרכבים.`}
+        onConfirm={() => { setMembers((x) => x.filter((y) => y.id !== confirm.id)); toast(`${confirm.name} הוסר/ה מהמשפחה`); setConfirm(null); }} />}
+    </>
+  );
+}
+
+/* =========================================================
+   App shell
+   ========================================================= */
+const TABS = [
+  { id: 'dashboard', label: 'רכבים', icon: 'Car' },
+  { id: 'garages', label: 'מוסכים', icon: 'MapPin' },
+  { id: 'settings', label: 'משפחה', icon: 'Users' },
+];
+
+function App() {
+  const [screen, setScreen] = useState({ name: 'dashboard', vehicleId: null });
+  const [vehicles, setVehicles] = useState(SEED_VEHICLES);
+  const [garages, setGarages] = useState(SEED_GARAGES);
+  const [members, setMembers] = useState(SEED_MEMBERS);
+  const [invites, setInvites] = useState([]);
+  const [reminders, setReminders] = useState({ d30: true, d7: true });
+  const [toasts, setToasts] = useState([]);
+  const [navOpen, setNavOpen] = useState(false);
+  const headerRef = useRef(null);
+  useEffect(() => {
+    if (!navOpen) return;
+    const onDoc = (e) => { if (headerRef.current && !headerRef.current.contains(e.target)) setNavOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setNavOpen(false); };
+    const onResize = () => { if (window.innerWidth >= 768) setNavOpen(false); };
+    document.addEventListener('mousedown', onDoc); document.addEventListener('touchstart', onDoc);
+    document.addEventListener('keydown', onKey); window.addEventListener('resize', onResize);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('touchstart', onDoc); document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); };
+  }, [navOpen]);
+  const [currentId, setCurrentId] = useState('m1'); // demo-only "view as" switch
+  const me = members.find((m) => m.id === currentId) || members[0];
+  const isAdmin = me.role === 'admin';
+
+  const toast = useCallback((message, type = 'success', opts = {}) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t.slice(-2), { id, message, type, action: opts.action }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), opts.duration || 4200);
+  }, []);
+  const dismissToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+  const go = (name, vehicleId = null) => { setNavOpen(false); setScreen({ name, vehicleId }); window.scrollTo({ top: 0 }); };
+  const switchUser = (id) => {
+    const next = members.find((m) => m.id === id); if (!next) return;
+    setCurrentId(id);
+    toast(`מוצג כ${next.name} (${ROLE[next.role]})`, 'info');
+  };
+  const updateVehicle = (id, fn) => setVehicles((vs) => vs.map((v) => (v.id === id ? fn(v) : v)));
+  const addVehicle = (v) => { setVehicles((vs) => [...vs, v]); go('dashboard'); toast(`״${v.nickname}״ נוסף למשפחה`); };
+  const deleteVehicle = (v) => { setVehicles((vs) => vs.filter((x) => x.id !== v.id)); go('dashboard'); toast(`״${v.nickname}״ נמחק`); };
+
+  const vehicle = screen.name === 'vehicle' ? vehicles.find((v) => v.id === screen.vehicleId) : null;
+  const activeTab = screen.name === 'garages' || screen.name === 'settings' ? screen.name : 'dashboard';
+
+  return (
+    <div dir="rtl" className="min-h-screen font-sans text-ink">
+      <header ref={headerRef} className="sticky top-0 z-20 border-b border-silver-300 bg-white">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
+          <button type="button" onClick={() => go('dashboard')} className="flex min-h-[44px] items-center gap-3 rounded-xl text-start">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand text-white"><Icon name="Car" size={22} /></span>
+            <span><span className="block text-base font-bold leading-tight">ניהול רכבי המשפחה</span><span className="block text-xs text-muted">משפחת כהן</span></span>
+          </button>
+          <nav aria-label="ניווט ראשי" className="hidden gap-1 md:flex">
+            {TABS.map((t) => (
+              <button key={t.id} type="button" aria-current={activeTab === t.id ? 'page' : undefined} onClick={() => go(t.id)}
+                className={`flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold ${activeTab === t.id ? 'bg-brand-50 text-brand' : 'text-ink hover:bg-silver-100'}`}>
+                <Icon name={t.icon} size={18} />{t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="hidden items-center gap-2 md:flex">
+            <label htmlFor="view-as" className="text-xs font-semibold text-muted">הצג כ:</label>
+            <select id="view-as" aria-label="הצג כמשתמש" value={me.id} onChange={(e) => switchUser(e.target.value)} className="min-h-[44px] rounded-xl border border-silver-300 bg-white px-2 text-sm font-semibold">
+              {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {ROLE[m.role]}</option>)}
+            </select>
+          </div>
+          <button type="button" className="grid h-11 w-11 place-items-center rounded-xl border border-silver-300 bg-white hover:bg-silver-100 md:hidden"
+            aria-label={navOpen ? 'סגירת התפריט' : 'פתיחת התפריט'} aria-expanded={navOpen} aria-controls="mobile-menu" onClick={() => setNavOpen((x) => !x)}>
+            <Icon name={navOpen ? 'X' : 'Menu'} />
+          </button>
+        </div>
+        {navOpen && (
+          <div id="mobile-menu" className="absolute inset-x-0 top-full border-b border-silver-300 bg-white shadow-lg md:hidden">
+            <nav aria-label="ניווט ראשי" className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-3">
+              {TABS.map((t) => (
+                <button key={t.id} type="button" aria-current={activeTab === t.id ? 'page' : undefined} onClick={() => go(t.id)}
+                  className={`flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-base font-semibold ${activeTab === t.id ? 'bg-brand-50 text-brand' : 'text-ink hover:bg-silver-100'}`}>
+                  <Icon name={t.icon} size={22} />{t.label}
+                  {activeTab === t.id && <Icon name="Check" size={18} className="ms-auto" />}
+                </button>
+              ))}
+              <div className="mt-2 flex flex-col gap-1.5 border-t border-silver-200 pt-3">
+                <label htmlFor="view-as-m" className="text-xs font-semibold text-muted">הצג כ: (הדגמה)</label>
+                <select id="view-as-m" value={me.id} onChange={(e) => { switchUser(e.target.value); setNavOpen(false); }} className="min-h-[44px] w-full rounded-xl border border-silver-300 bg-white px-3 text-base font-semibold">
+                  {members.map((m) => <option key={m.id} value={m.id}>{m.name} · {ROLE[m.role]}</option>)}
+                </select>
+              </div>
+            </nav>
+          </div>
+        )}
+      </header>
+
+      <main className="mx-auto max-w-5xl px-4 pb-10 pt-5">
+        {screen.name === 'dashboard' && <Dashboard vehicles={vehicles} go={go} isAdmin={isAdmin} />}
+        {screen.name === 'add' && (isAdmin ? <AddVehicle vehicles={vehicles} onAdd={addVehicle} go={go} toast={toast} /> : <NoAccess go={go} />)}
+        {screen.name === 'vehicle' && (vehicle
+          ? <VehicleScreen key={vehicle.id} v={vehicle} garages={garages} go={go} toast={toast} updateVehicle={updateVehicle} deleteVehicle={deleteVehicle} isAdmin={isAdmin} />
+          : <EmptyState icon="Car" title="הרכב לא נמצא" />)}
+        {screen.name === 'garages' && <Garages garages={garages} vehicles={vehicles} setGarages={setGarages} setVehicles={setVehicles} toast={toast} />}
+        {screen.name === 'settings' && <Settings members={members} setMembers={setMembers} invites={invites} setInvites={setInvites} reminders={reminders} setReminders={setReminders} toast={toast} isAdmin={isAdmin} currentId={me.id} />}
+      </main>
+
+
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex flex-col items-center gap-2 px-4">
+        {toasts.map((t) => (
+          <div key={t.id} role="status" className={`toast-in pointer-events-auto flex max-w-md items-start gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg ${t.type === 'error' ? 'bg-red-700' : t.type === 'info' ? 'bg-gray-800' : 'bg-green-800'}`}>
+            <Icon name={t.type === 'error' ? 'AlertTriangle' : t.type === 'info' ? 'Info' : 'CheckCircle2'} size={18} className="mt-0.5" />
+            <span className="flex-1">{t.message}</span>
+            {t.action && (
+              <button type="button" onClick={() => { dismissToast(t.id); t.action.onClick(); }}
+                className="-my-1 min-h-[36px] shrink-0 rounded-lg border border-white/60 px-3 font-bold underline hover:bg-white/10">{t.action.label}</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
