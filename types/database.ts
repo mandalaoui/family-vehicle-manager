@@ -1,6 +1,16 @@
 // Hand-written to match supabase/migrations. Keep in sync when the schema changes.
 export type Role = "admin" | "member";
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
+export type RenewalUndoEntry = { previous: string | null; next: string; at: string };
+export type RenewalUndoMap = Partial<Record<"test_due" | "license_due", RenewalUndoEntry>>;
+export interface DeletedServiceLog {
+  vehicle_id: string;
+  service_date: string;
+  mileage: number;
+  garage: string | null;
+  cost: number | null;
+  notes: string | null;
+}
 export type FuelType = "petrol" | "diesel" | "hybrid" | "plug_in" | "electric";
 
 export type Database = {
@@ -76,6 +86,8 @@ export type Database = {
           notes: string | null;
           created_at: string;
           updated_at: string;
+          photo_path: string | null;
+          renewal_undo: RenewalUndoMap | null;
         };
         Insert: {
           id?: string;
@@ -95,6 +107,7 @@ export type Database = {
           next_service_km?: number | null;
           service_interval_km?: number;
           notes?: string | null;
+          photo_path?: string | null;
         };
         Update: {
           plate?: string;
@@ -112,6 +125,7 @@ export type Database = {
           next_service_km?: number | null;
           service_interval_km?: number;
           notes?: string | null;
+          photo_path?: string | null;
         };
         Relationships: [];
       };
@@ -159,6 +173,17 @@ export type Database = {
         Returns: { family_name: string; role: Role; status: InvitationStatus; email_matches: boolean | null }[];
       };
       recompute_next_service: { Args: { p_vehicle_id: string }; Returns: undefined };
+      update_service_log: {
+        Args: { p_log_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null };
+        Returns: string;
+      };
+      delete_service_log: { Args: { p_log_id: string }; Returns: DeletedServiceLog };
+      restore_service_log: {
+        Args: { p_vehicle_id: string; p_date: string; p_mileage: number; p_garage: string | null; p_cost: number | null; p_notes: string | null };
+        Returns: string;
+      };
+      renew_due: { Args: { p_vehicle_id: string; p_field: string }; Returns: { previous: string | null; next: string } };
+      undo_renew_due: { Args: { p_vehicle_id: string; p_field: string }; Returns: string | null };
       complete_service: {
         Args: {
           p_vehicle_id: string;

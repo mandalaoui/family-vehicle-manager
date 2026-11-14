@@ -138,4 +138,44 @@ delete from public.service_logs;
 select chk('recompute: no logs gives null', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.recompute_next_service((select id from veh_id)) $q$), 'ok');
 select chk('recompute: next_service_km null', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), null);
 
+-- Phase 1.5 checks (migration 20261115100000). Spliced into rls_tests.sql before its final select.
+-- B is admin of fam; veh_id = vehicle 8888888; C is not a member.
+select chk('p15: B restores a log via RPC', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.restore_service_log((select id from veh_id), current_date, 1000, 'G', 10, 'n') $q$), 'ok');
+select chk('p15: next_service after restore', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), '11000');
+select chk('p15: update_service_log recomputes', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.update_service_log((select id from public.service_logs limit 1), current_date, 2500, ' Z ', null, null) $q$), 'ok');
+select chk('p15: next_service after update', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), '12500');
+select chk('p15: garage trimmed', (select garage from public.service_logs limit 1), 'Z');
+select chk('p15: C cannot update log', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.update_service_log((select id from public.service_logs limit 1), current_date, 1, null, null, null) $q$), 'forbidden');
+select chk('p15: C cannot delete log', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.delete_service_log((select id from public.service_logs limit 1)) $q$), 'forbidden');
+select chk('p15: anon cannot delete log', public.run_as(null,null,$q$ select public.delete_service_log(gen_random_uuid()) $q$), 'permission denied for function delete_service_log');
+select chk('p15: delete_service_log ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.delete_service_log((select id from public.service_logs limit 1)) $q$), 'ok');
+select chk('p15: next_service null after deleting last log', (select next_service_km::text from public.vehicles where id=(select id from veh_id)), null);
+
+update public.vehicles set test_due = current_date + 10, license_due = null where id=(select id from veh_id);
+select chk('p15: renew_due ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'test_due') $q$), 'ok');
+select chk('p15: renewed +12 months from old date', (select (test_due = (current_date + 10 + interval '12 months')::date)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('p15: undo info stored', (select ((renewal_undo -> 'test_due' ->> 'previous')::date = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('p15: renew bad field', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'insurance_due') $q$), 'invalid_field');
+select chk('p15: C cannot renew', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.renew_due((select id from veh_id), 'test_due') $q$), 'forbidden');
+select chk('p15: undo ok', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'test_due') $q$), 'ok');
+select chk('p15: date restored', (select (test_due = current_date + 10)::text from public.vehicles where id=(select id from veh_id)), 'true');
+select chk('p15: undo cleared', (select (renewal_undo ? 'test_due')::text from public.vehicles where id=(select id from veh_id)), 'false');
+select chk('p15: undo again unavailable', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'test_due') $q$), 'undo_unavailable');
+select chk('p15: renew from null date', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.renew_due((select id from veh_id), 'license_due') $q$), 'ok');
+update public.vehicles set license_due = license_due + 5 where id=(select id from veh_id);
+select chk('p15: undo stale after manual edit', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'undo_stale');
+update public.vehicles set renewal_undo = jsonb_build_object('license_due', jsonb_build_object('previous', null, 'next', license_due, 'at', current_date - 31)) where id=(select id from veh_id);
+select chk('p15: undo expired after 30 days', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.undo_renew_due((select id from veh_id), 'license_due') $q$), 'undo_expired');
+
+create temp table photo_path as select (select id from fam)::text || '/' || (select id from veh_id)::text || '.jpg' as p;
+grant select on photo_path to authenticated;
+select chk('p15: member can access own path', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select 1 where public.can_access_vehicle_photo((select p from photo_path)) $q$), '1');
+select chk('p15: non-member cannot access path', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select 1 where public.can_access_vehicle_photo((select p from photo_path)) $q$), '0');
+select chk('p15: wrong vehicle id denied', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select 1 where public.can_access_vehicle_photo((select id from fam)::text || '/' || gen_random_uuid()::text || '.jpg') $q$), '0');
+select chk('p15: malformed path denied', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select 1 where public.can_access_vehicle_photo('../x.jpg') $q$), '0');
+insert into storage.objects(bucket_id, name) select 'vehicle-photos', p from photo_path;
+select chk('p15: storage select member', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com','select * from storage.objects'), '1');
+select chk('p15: storage select non-member', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from storage.objects'), '0');
+select chk('p15: storage insert by non-member blocked', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into storage.objects(bucket_id,name) select 'vehicle-photos', p from photo_path $q$), 'new row violates row-level security policy for table "objects"');
+
 select n, case when got is not distinct from want then 'PASS' else 'FAIL' end as r, name, got, want from public.zz_results order by n;

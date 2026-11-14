@@ -12,6 +12,7 @@ import { getFamilyContext } from "@/lib/server/context";
 import { uuidSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 import { dateLevel } from "@/lib/alerts";
+import { activeUndo } from "@/lib/renew";
 
 export const metadata = { title: "פרטי רכב · ניהול רכבי המשפחה" };
 
@@ -76,6 +77,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         today={today}
         staleAge={stale ? age : null}
         garages={garages}
+        undo={{ test_due: activeUndo(v, "test_due", today), license_due: activeUndo(v, "license_due", today) }}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <span>

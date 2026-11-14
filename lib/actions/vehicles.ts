@@ -2,16 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { dbErrorMessage } from "@/lib/errors";
-import { addMonths, formatNumber, KM, todayInIsrael } from "@/lib/format";
+import { formatNumber, KM, todayInIsrael } from "@/lib/format";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { dueFieldSchema, mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/lib/validation";
 
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
 const NOT_FOUND = "הרכב לא נמצא. ייתכן שהוא נמחק.";
-
-type DueField = "test_due" | "license_due";
-const duePatch = (field: DueField, value: string | null) => (field === "test_due" ? { test_due: value } : { license_due: value });
 
 function revalidateVehicle(id?: string) {
   revalidatePath("/");
@@ -110,7 +107,7 @@ export async function updateMileage(id: string, mileage: string): Promise<Action
   return { ok: true, mileage: parsed.data.mileage };
 }
 
-/** Marks a test/license as renewed for 12 months and reports the previous date so the UI can offer undo. */
+/** Marks a test/license as renewed for 12 months (one DB transaction); the DB stores the undo info. */
 export async function renewDue(
   id: string,
   field: string,
@@ -121,46 +118,22 @@ export async function renewDue(
   const f = dueFieldSchema.safeParse(field);
   if (!vid.success || !f.success) return fail(BAD_REQUEST);
 
-  const { data: current, error: readError } = await s.supabase.from("vehicles").select("test_due, license_due").eq("id", vid.data).maybeSingle();
-  if (readError) return fail(dbErrorMessage(readError, "renew_read"));
-  if (!current) return fail(NOT_FOUND);
-
-  const previous = current[f.data];
-  const today = todayInIsrael();
-  const base = previous && previous > today ? previous : today;
-  const next = addMonths(base, 12);
-
-  const { data, error } = await s.supabase.from("vehicles").update(duePatch(f.data, next)).eq("id", vid.data).select("id");
-  if (error) return fail(dbErrorMessage(error, "renew"));
-  if (!data?.length) return fail(FORBIDDEN);
+  const { data, error } = await s.supabase.rpc("renew_due", { p_vehicle_id: vid.data, p_field: f.data });
+  if (error) return fail(dbErrorMessage(error, "renew_due"));
   revalidateVehicle(vid.data);
-  return { ok: true, previous, next };
+  return { ok: true, previous: data.previous, next: data.next };
 }
 
-/** Undo for renewDue. Only applies if the date is still the one the renewal produced. */
-export async function restoreDue(
-  id: string,
-  field: string,
-  restoreTo: string | null,
-  expectedCurrent: string,
-): Promise<ActionResult> {
+/** Undo for renewDue (30 days, only while the date is still the renewed one; enforced in the DB). */
+export async function undoRenewDue(id: string, field: string): Promise<ActionResult<{ restoredTo: string | null }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
   const vid = uuidSchema.safeParse(id);
   const f = dueFieldSchema.safeParse(field);
-  const iso = /^\d{4}-\d{2}-\d{2}$/;
-  if (!vid.success || !f.success || !iso.test(expectedCurrent) || (restoreTo !== null && !iso.test(restoreTo))) {
-    return fail(BAD_REQUEST);
-  }
+  if (!vid.success || !f.success) return fail(BAD_REQUEST);
 
-  const { data, error } = await s.supabase
-    .from("vehicles")
-    .update(duePatch(f.data, restoreTo))
-    .eq("id", vid.data)
-    .eq(f.data, expectedCurrent)
-    .select("id");
-  if (error) return fail(dbErrorMessage(error, "restore_due"));
-  if (!data?.length) return fail("התאריך השתנה מאז החידוש, ולכן אי אפשר לבטל אותו אוטומטית. אפשר לערוך אותו ידנית.");
+  const { data, error } = await s.supabase.rpc("undo_renew_due", { p_vehicle_id: vid.data, p_field: f.data });
+  if (error) return fail(dbErrorMessage(error, "undo_renew_due"));
   revalidateVehicle(vid.data);
-  return { ok: true };
+  return { ok: true, restoredTo: data };
 }

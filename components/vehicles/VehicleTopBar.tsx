@@ -8,9 +8,11 @@ import { ScreenHeader } from "@/components/ui/Layout";
 import { Menu, type MenuItem } from "@/components/ui/Menu";
 import { ConfirmModal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { deleteVehicle, renewDue, restoreDue } from "@/lib/actions/vehicles";
+import { deleteVehicle, renewDue, undoRenewDue } from "@/lib/actions/vehicles";
 import { daysBetween, formatDate } from "@/lib/format";
-import { clearRenewUndo, saveRenewUndo, useRenewUndo, type RenewField } from "@/lib/renew-undo";
+import type { RenewalUndoEntry } from "@/types/database";
+
+type RenewField = "test_due" | "license_due";
 import { MileageModal } from "./MileageModal";
 import { ServiceModal } from "./ServiceModal";
 
@@ -33,6 +35,7 @@ export function VehicleTopBar({
   today,
   staleAge,
   garages,
+  undo,
 }: {
   vehicle: TopBarVehicle;
   subtitle: React.ReactNode;
@@ -41,6 +44,8 @@ export function VehicleTopBar({
   /** Days since the last mileage reading when it is stale, otherwise null. */
   staleAge: number | null;
   garages: string[];
+  /** Active (recent, still applicable) renewal undo info, computed by the server. */
+  undo: Record<RenewField, RenewalUndoEntry | null>;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -48,18 +53,14 @@ export function VehicleTopBar({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const testUndo = useRenewUndo(v.id, "test_due", v.test_due, today);
-  const licenseUndo = useRenewUndo(v.id, "license_due", v.license_due, today);
-
-  function undoRenew(field: RenewField, previous: string | null, next: string) {
+  function undoRenew(field: RenewField) {
     startTransition(async () => {
-      const res = await restoreDue(v.id, field, previous, next);
+      const res = await undoRenewDue(v.id, field);
       if (!res.ok) {
         toast(res.error, { type: "error" });
         return;
       }
-      clearRenewUndo(v.id, field);
-      toast(`החידוש בוטל. תוקף ${FIELD_LABEL[field]} חזר ל־${formatDate(previous)}.`, { type: "info" });
+      toast(`החידוש בוטל. תוקף ${FIELD_LABEL[field]} חזר ל־${formatDate(res.restoredTo)}.`, { type: "info" });
       router.refresh();
     });
   }
@@ -71,9 +72,8 @@ export function VehicleTopBar({
         toast(res.error, { type: "error" });
         return;
       }
-      saveRenewUndo(v.id, field, { previous: res.previous, next: res.next, at: today });
       toast(`${FIELD_LABEL[field]} סומן כחודש. תוקף חדש: ${formatDate(res.next)}.`, {
-        action: { label: "ביטול", onClick: () => undoRenew(field, res.previous, res.next) },
+        action: { label: "ביטול", onClick: () => undoRenew(field) },
       });
       router.refresh();
     });
@@ -100,16 +100,13 @@ export function VehicleTopBar({
       items.push({ label: `סימון ${FIELD_LABEL[field]} כחודש`, icon: RefreshCw, onClick: () => renew(field) });
     }
   }
-  const undos: [RenewField, typeof testUndo][] = [
-    ["license_due", licenseUndo],
-    ["test_due", testUndo],
-  ];
-  for (const [field, undo] of undos) {
-    if (undo) {
+  for (const field of ["license_due", "test_due"] as const) {
+    const entry = undo[field];
+    if (entry) {
       items.push({
-        label: `ביטול חידוש ${FIELD_LABEL[field]} (חזרה ל־${formatDate(undo.previous)})`,
+        label: `ביטול חידוש ${FIELD_LABEL[field]} (חזרה ל־${formatDate(entry.previous)})`,
         icon: Undo2,
-        onClick: () => undoRenew(field, undo.previous, undo.next),
+        onClick: () => undoRenew(field),
       });
     }
   }
