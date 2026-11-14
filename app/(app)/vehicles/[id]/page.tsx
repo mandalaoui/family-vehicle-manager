@@ -1,6 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { RefreshMinistryButton } from "@/components/vehicles/RefreshMinistryButton";
+import { VehicleImage } from "@/components/vehicles/VehicleImage";
+import { VehiclePhotoControl } from "@/components/vehicles/VehiclePhotoControl";
+import { signedPhotoUrls } from "@/lib/server/photos";
 import { LastTestInfo } from "@/components/vehicles/LastTestInfo";
 import { ClipboardList, FileCheck, Gauge, StickyNote, Wrench } from "lucide-react";
 import { vehicleName } from "@/components/vehicles/VehicleCard";
@@ -58,6 +61,8 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   ]);
   if (!v) notFound();
 
+  const photos = await signedPhotoUrls(supabase, [v.photo_path]);
+  const photoUrl = v.photo_path ? photos.get(v.photo_path) : null;
   const today = todayInIsrael();
   const name = vehicleName(v);
   const age = daysBetween(v.mileage_updated_at, today);
@@ -98,6 +103,11 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
           </span>
         }
       />
+
+      <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-silver-300 bg-white p-3 shadow-sm sm:p-4">
+        <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} alt={name} className="h-48 overflow-hidden rounded-xl sm:h-56" />
+        <VehiclePhotoControl vehicleId={v.id} familyId={ctx!.membership!.familyId} hasPhoto={Boolean(photoUrl)} />
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Section icon={Wrench} title="עבודות קרובות">

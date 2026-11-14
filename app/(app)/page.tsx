@@ -8,6 +8,7 @@ import { Status } from "@/components/ui/Status";
 import { actionableAlerts, compareAlerts, getVehicleAlerts, type AlertKind } from "@/lib/alerts";
 import { plural, todayInIsrael } from "@/lib/format";
 import { getFamilyContext } from "@/lib/server/context";
+import { signedPhotoUrls } from "@/lib/server/photos";
 import { createClient } from "@/utils/supabase/server";
 
 export const metadata = { title: "רכבים · ניהול רכבי המשפחה" };
@@ -28,6 +29,7 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: true });
   const list = vehicles ?? [];
+  const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();
 
   const rows = list
@@ -101,7 +103,7 @@ export default async function DashboardPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((v) => (
-              <VehicleCard key={v.id} vehicle={v} today={today} />
+              <VehicleCard key={v.id} vehicle={v} today={today} photoUrl={v.photo_path ? photos.get(v.photo_path) : null} />
             ))}
           </div>
         )}

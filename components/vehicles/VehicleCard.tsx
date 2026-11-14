@@ -1,31 +1,15 @@
 import Link from "next/link";
-import { Car, Gauge } from "lucide-react";
+import { Gauge } from "lucide-react";
 import { actionableAlerts, getVehicleAlerts } from "@/lib/alerts";
-import { COLOR_HEX, formatDate, formatNumber, KM } from "@/lib/format";
+import { formatDate, formatNumber, KM } from "@/lib/format";
 import type { Vehicle } from "@/types/database";
 import { Ltr, Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
+import { VehicleImage } from "./VehicleImage";
 
 export const vehicleName = (v: Pick<Vehicle, "nickname" | "make" | "model">) => v.nickname?.trim() || `${v.make} ${v.model}`;
 
-function PhotoPlaceholder({ color }: { color: string | null }) {
-  return (
-    <div className="relative grid h-32 place-items-center bg-silver-100">
-      <div className="flex flex-col items-center gap-1 text-gray-500">
-        <Car size={52} aria-hidden />
-        <span className="text-xs">מקום לתמונה</span>
-      </div>
-      {color ? (
-        <span className="absolute bottom-2 start-2 inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 text-xs font-medium shadow-sm">
-          <span className="h-3 w-3 rounded-full border border-gray-400" style={{ background: COLOR_HEX[color] ?? COLOR_HEX["אחר"] }} aria-hidden />
-          {color}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-export function VehicleCard({ vehicle: v, today }: { vehicle: Vehicle; today: string }) {
+export function VehicleCard({ vehicle: v, today, photoUrl }: { vehicle: Vehicle; today: string; photoUrl?: string | null }) {
   const alerts = actionableAlerts(getVehicleAlerts(v, today));
   const next = alerts[0];
   return (
@@ -33,7 +17,7 @@ export function VehicleCard({ vehicle: v, today }: { vehicle: Vehicle; today: st
       href={`/vehicles/${v.id}`}
       className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-silver-300 bg-white text-start shadow-sm transition-shadow hover:shadow-md"
     >
-      <PhotoPlaceholder color={v.color} />
+      <VehicleImage photoUrl={photoUrl} color={v.color} make={v.make} alt={vehicleName(v)} className="h-36" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

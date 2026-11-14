@@ -10,6 +10,9 @@ import { useToast } from "@/components/ui/Toast";
 import { createVehicle, updateVehicle } from "@/lib/actions/vehicles";
 import { COLORS, digitsOnly, formatDate, FUEL_LABELS, KM } from "@/lib/format";
 import type { MinistryVehicle } from "@/lib/ministry-map";
+import { uploadVehiclePhoto } from "@/lib/upload-photo";
+import { PhotoPicker } from "./PhotoPicker";
+import { VehicleImage } from "./VehicleImage";
 import type { Vehicle } from "@/types/database";
 
 type Lookup =
@@ -38,7 +41,7 @@ function initialState(v?: Vehicle) {
   };
 }
 
-export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
+export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle; familyId: string; photoUrl?: string | null }) {
   const router = useRouter();
   const toast = useToast();
   const [f, setF] = useState(() => initialState(vehicle));
@@ -47,9 +50,19 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
   const [lookup, setLookup] = useState<Lookup>({ state: "idle" });
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const seq = useRef(0);
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string } | null>(null);
   const editing = Boolean(vehicle);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+  const photoUrlRef = useRef<string | null>(null);
+  useEffect(() => () => { if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current); }, []);
+
+  function pickPhoto(blob: Blob) {
+    if (photoUrlRef.current) URL.revokeObjectURL(photoUrlRef.current);
+    const url = URL.createObjectURL(blob);
+    photoUrlRef.current = url;
+    setPhoto({ blob, url });
+  }
 
   // Prefill from the Ministry of Transport. Every field stays editable afterwards.
   function apply(m: MinistryVehicle) {
@@ -113,9 +126,14 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
         toast(res.fieldErrors ? "יש לתקן את השדות המסומנים." : res.error, { type: "error" });
         return;
       }
+      const vid = vehicle?.id ?? (res as { id?: string }).id ?? "";
+      if (photo && vid) {
+        const up = await uploadVehiclePhoto(familyId, vid, photo.blob);
+        if (!up.ok) toast(`הרכב נשמר, אבל ${up.error}`, { type: "error" });
+      }
       const name = f.nickname.trim() || `${f.make.trim()} ${f.model.trim()}`;
       toast(editing ? "פרטי הרכב עודכנו." : `״${name}״ נוסף למשפחה.`);
-      router.push(vehicle ? `/vehicles/${vehicle.id}` : `/vehicles/${"id" in res ? res.id : ""}`);
+      router.push(`/vehicles/${vid}`);
       router.refresh();
     });
   }
@@ -125,6 +143,15 @@ export function VehicleForm({ vehicle }: { vehicle?: Vehicle }) {
       <section className="rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
         <h2 className="mb-4 text-base font-bold">פרטי הרכב</h2>
         <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-3 sm:col-span-2">
+            <VehicleImage photoUrl={photo?.url ?? photoUrl} color={f.color || null} make={f.make || null} alt="תמונת הרכב" className="h-44 overflow-hidden rounded-xl" />
+            <PhotoPicker
+              onPick={pickPhoto}
+              onError={(m) => toast(m, { type: "error" })}
+              cameraLabel={photo || photoUrl ? "צילום חדש" : "צילום תמונה"}
+            />
+            <p className="text-xs text-muted">אפשר להוסיף תמונה, או להשאיר איור לפי צבע הרכב. התמונה מוקטנת לפני ההעלאה.</p>
+          </div>
           <Field id="plate" label="מספר רכב" error={errors.plate} hint="7 או 8 ספרות, בלי רווחים">
             <TextInput id="plate" ltr inputMode="numeric" autoComplete="off" placeholder="לדוגמה 1234567" maxLength={10} value={f.plate} error={errors.plate} onChange={(e) => onPlate(e.target.value)} />
           </Field>

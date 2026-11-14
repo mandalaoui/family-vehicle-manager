@@ -9,6 +9,7 @@ export const metadata = { title: "הוספת רכב · ניהול רכבי המ�
 export default async function NewVehiclePage() {
   const ctx = await getFamilyContext();
   const isAdmin = ctx!.membership!.role === "admin";
+  const familyId = ctx!.membership!.familyId;
 
   if (!isAdmin) {
     return (
@@ -28,7 +29,7 @@ export default async function NewVehiclePage() {
   return (
     <>
       <ScreenHeader title="הוספת רכב" subtitle="הזינו את פרטי הרכב. אפשר לעדכן אותם בכל שלב." backHref="/" />
-      <VehicleForm />
+      <VehicleForm familyId={familyId} />
     </>
   );
 }
