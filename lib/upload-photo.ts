@@ -1,0 +1,22 @@
+"use client";
+
+import { setVehiclePhoto } from "@/lib/actions/photos";
+import { PHOTO_BUCKET, photoPath } from "@/lib/photo-path";
+import { createClient } from "@/utils/supabase/client";
+
+/** Uploads straight from the browser (storage RLS enforces the family folder), then records photo_path. */
+export async function uploadVehiclePhoto(
+  familyId: string,
+  vehicleId: string,
+  photo: Blob,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createClient();
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(photoPath(familyId, vehicleId), photo, {
+    upsert: true,
+    contentType: "image/jpeg",
+    cacheControl: "3600",
+  });
+  if (error) return { ok: false, error: "העלאת התמונה נכשלה. בדקו את החיבור ונסו שוב." };
+  const res = await setVehiclePhoto(vehicleId);
+  return res.ok ? { ok: true } : { ok: false, error: res.error };
+}
