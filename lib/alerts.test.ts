@@ -196,3 +196,15 @@ describe("wheelStatus", () => {
     expect(wheelStatus("2026-06-01", { ...v, tires_replaced_km: 30000 }, today).level).toBe("overdue");
   });
 });
+
+describe("tires alert wording", () => {
+  const v = { ...base, mileage: 90000, tires_reminder_months: 48, tires_reminder_km: 50000 };
+  it("does not say 'whichever comes first' when only a date is known", () => {
+    const a = getVehicleAlerts({ ...v, tires_replaced_at: "2022-12-15", tires_replaced_km: null }, today).find((x) => x.kind === "tires")!;
+    expect(a.detail).not.toContain("המוקדם מביניהם");
+  });
+  it("says it when both a date and a km limit exist", () => {
+    const a = getVehicleAlerts({ ...v, tires_replaced_at: "2022-12-15", tires_replaced_km: 60000 }, today).find((x) => x.kind === "tires")!;
+    expect(a.detail).toContain("המוקדם מביניהם");
+  });
+});

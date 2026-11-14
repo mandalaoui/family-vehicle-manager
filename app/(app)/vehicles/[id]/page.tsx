@@ -281,7 +281,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
                       או בקילומטראז׳ <Ltr>{formatNumber(tires.dueKm)}</Ltr> {KM}
                     </>
                   ) : null}
-                  , המוקדם מביניהם.
+                  {tires.kmLeft != null && tires.dueKm != null ? ", המוקדם מביניהם." : "."}
                 </p>
               </div>
             </div>
