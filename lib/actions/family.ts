@@ -8,6 +8,7 @@ import { emailSchema, familyNameSchema, roleSchema, tokenSchema, uuidSchema } fr
 import { createClient } from "@/utils/supabase/server";
 
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
+const ALREADY_IN_FAMILY = "החשבון הזה כבר חבר במשפחה. כדי להצטרף למשפחה אחרת, עזבו קודם את המשפחה הנוכחית בהגדרות.";
 
 export async function createFamily(name: string): Promise<ActionResult> {
   const ctx = await getFamilyContext();
@@ -27,6 +28,8 @@ export async function createFamily(name: string): Promise<ActionResult> {
 export async function acceptInvitation(token: string): Promise<ActionResult> {
   const ctx = await getFamilyContext();
   if (!ctx) return fail(NOT_SIGNED_IN);
+  // One family per user in the app UX: a second membership would be invisible to the user.
+  if (ctx.membership) return fail(ALREADY_IN_FAMILY);
   const parsed = tokenSchema.safeParse(token);
   if (!parsed.success) return fail(parsed.error.issues[0].message);
 
