@@ -14,7 +14,7 @@ export async function uploadVehiclePhoto(
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(photoPath(familyId, vehicleId), photo, {
     upsert: true,
     contentType: "image/jpeg",
-    cacheControl: "3600",
+    cacheControl: "60" // short: the file is replaced in place, so a long CDN cache would show the old photo,
   });
   if (error) return { ok: false, error: "העלאת התמונה נכשלה. בדקו את החיבור ונסו שוב." };
   const res = await setVehiclePhoto(vehicleId);

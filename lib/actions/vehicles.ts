@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { dbErrorMessage, MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/errors";
 import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { rateLimited } from "@/lib/server/rate-limit";
+import { PHOTO_BUCKET, photoPath } from "@/lib/photo-path";
 import { formatNumber, KM, todayInIsrael } from "@/lib/format";
 import { fail, isSession, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/lib/validation";
@@ -110,6 +111,14 @@ export async function deleteVehicle(id: string): Promise<ActionResult> {
   if (s.role !== "admin") return fail("מחיקת רכב פתוחה למנהלי המשפחה בלבד.");
   const vid = uuidSchema.safeParse(id);
   if (!vid.success) return fail(BAD_REQUEST);
+
+  // Remove the photo first: the storage policy needs the vehicle row to exist, so after the delete
+  // the object could never be removed again through the API.
+  const { data: existing } = await s.supabase.from("vehicles").select("photo_path").eq("id", vid.data).maybeSingle();
+  if (existing?.photo_path) {
+    const removed = await s.supabase.storage.from(PHOTO_BUCKET).remove([photoPath(s.familyId, vid.data)]);
+    if (removed.error) console.error("[delete_vehicle_photo]", removed.error.message);
+  }
 
   const { data, error } = await s.supabase.from("vehicles").delete().eq("id", vid.data).select("id");
   if (error) return fail(dbErrorMessage(error, "delete_vehicle"));
