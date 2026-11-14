@@ -27,7 +27,7 @@ export async function setVehiclePhoto(vehicleId: string): Promise<ActionResult> 
     return fail("ההעלאה לא הושלמה. נסו להעלות את התמונה שוב.");
   }
 
-  const { data, error } = await s.supabase.from("vehicles").update({ photo_path: path }).eq("id", vid.data).select("id");
+  const { data, error } = await s.supabase.from("vehicles").update({ photo_path: path }).eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) return fail(dbErrorMessage(error, "set_photo"));
   if (!data?.length) return fail("הרכב לא נמצא. ייתכן שהוא נמחק.");
   revalidate(vid.data);
@@ -40,7 +40,7 @@ export async function removeVehiclePhoto(vehicleId: string): Promise<ActionResul
   const vid = uuidSchema.safeParse(vehicleId);
   if (!vid.success) return fail(BAD_REQUEST);
 
-  const { data, error } = await s.supabase.from("vehicles").update({ photo_path: null }).eq("id", vid.data).select("id");
+  const { data, error } = await s.supabase.from("vehicles").update({ photo_path: null }).eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) return fail(dbErrorMessage(error, "remove_photo"));
   if (!data?.length) return fail("הרכב לא נמצא. ייתכן שהוא נמחק.");
 
