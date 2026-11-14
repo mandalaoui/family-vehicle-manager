@@ -5,14 +5,15 @@ import { VehicleImage } from "@/components/vehicles/VehicleImage";
 import { VehiclePhotoControl } from "@/components/vehicles/VehiclePhotoControl";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { LastTestInfo } from "@/components/vehicles/LastTestInfo";
-import { ClipboardList, FileCheck, Gauge, StickyNote, Wrench } from "lucide-react";
+import Link from "next/link";
+import { ClipboardList, FileCheck, Gauge, ShieldPlus, StickyNote, Wrench } from "lucide-react";
 import { vehicleName } from "@/components/vehicles/VehicleCard";
 import { ServiceHistory } from "@/components/vehicles/ServiceHistory";
 import { VehicleTopBar } from "@/components/vehicles/VehicleTopBar";
-import { EmptyState, Row, Section } from "@/components/ui/Layout";
+import { Row, Section } from "@/components/ui/Layout";
 import { Ltr, Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
-import { describeDays, isMileageStale, serviceLevel } from "@/lib/alerts";
+import { describeDays, estimateService, isMileageStale, serviceLevel } from "@/lib/alerts";
 import { daysBetween, formatDate, formatNumber, FUEL_LABELS, KM, todayInIsrael } from "@/lib/format";
 import { getFamilyContext } from "@/lib/server/context";
 import { uuidSchema } from "@/lib/validation";
@@ -67,6 +68,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   const name = vehicleName(v);
   const age = daysBetween(v.mileage_updated_at, today);
   const stale = isMileageStale(v, today);
+  const estimate = estimateService(v, today);
   const kmLeft = v.next_service_km != null ? v.next_service_km - v.mileage : null;
   const garages = [...new Set((logs ?? []).map((l) => l.garage).filter((g): g is string => Boolean(g)))];
 
@@ -111,9 +113,25 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
       <div className="grid gap-4 md:grid-cols-2">
         <Section icon={Wrench} title="עבודות קרובות">
           {kmLeft === null || v.next_service_km === null ? (
-            <EmptyState icon={Wrench} title="עדיין לא נקבע טיפול הבא">
-              לחצו על ״בוצע טיפול״ כדי לתעד טיפול אחרון. מיד אחר כך נחשב את הטיפול הבא, כל {formatNumber(v.service_interval_km)} {KM}.
-            </EmptyState>
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <Status level={estimate.level} />
+                <span className="inline-flex items-center gap-1 rounded-full border border-silver-300 bg-silver-50 px-2.5 py-0.5 text-xs font-bold">הערכה</span>
+                <span className="text-sm font-semibold">
+                  טיפול תקופתי כל <Ltr>{formatNumber(v.service_interval_km)}</Ltr> {KM}
+                </span>
+              </div>
+              <div className="rounded-xl border border-dashed border-brand bg-brand-50 p-3">
+                <p className="text-sm text-muted">הטיפול הבא (הערכה), המוקדם מביניהם:</p>
+                <p className="font-bold">
+                  <Ltr>{formatNumber(estimate.nextKm)}</Ltr> {KM} · עוד <Ltr>{formatNumber(estimate.kmLeft)}</Ltr> {KM}
+                </p>
+                <p className="font-bold">
+                  עד <Ltr>{formatDate(estimate.nextDate)}</Ltr> <span className="text-sm font-normal text-muted">({describeDays(estimate.daysLeft)})</span>
+                </p>
+              </div>
+              <p className="mt-2 text-xs text-muted">זו הערכה בלבד, לפי הקילומטראז׳ הנוכחי ומרווח הטיפול. לחצו על ״בוצע טיפול״ כדי לתעד טיפול אמיתי והחישוב יתעדכן.</p>
+            </>
           ) : (
             <>
               <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -141,12 +159,33 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
               </div>
             </>
           )}
+
+          <div className="mt-3 border-t border-silver-200 pt-3">
+            {v.insurance_due ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted">חידוש ביטוח</span>
+                  <span className="text-sm font-semibold">
+                    <Ltr>{formatDate(v.insurance_due)}</Ltr>
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <Status level={dateLevel(daysBetween(today, v.insurance_due))} />
+                  <span className="text-sm text-muted">{describeDays(daysBetween(today, v.insurance_due))}</span>
+                </div>
+              </>
+            ) : (
+              <Link href={`/vehicles/${v.id}/edit`} className="inline-flex min-h-[44px] items-center gap-2 rounded-xl text-sm font-semibold text-brand underline">
+                <ShieldPlus size={18} aria-hidden />
+                הוסף תוקף ביטוח
+              </Link>
+            )}
+          </div>
         </Section>
 
-        <Section icon={FileCheck} title="רישוי, טסט וביטוח" action={<RefreshMinistryButton vehicleId={v.id} />}>
+        <Section icon={FileCheck} title="טסט ורישוי" action={<RefreshMinistryButton vehicleId={v.id} />}>
           <div className="divide-y divide-silver-200">
             <DueRow label="תוקף טסט ורישוי" due={v.license_due} today={today} />
-            <DueRow label="תוקף ביטוח" due={v.insurance_due} today={today} />
             <Suspense fallback={null}>
               <LastTestInfo plate={v.plate} />
             </Suspense>

@@ -36,11 +36,14 @@ function initialState(v?: Vehicle) {
     license_due: dateValue(v?.license_due),
     insurance_due: dateValue(v?.insurance_due),
     next_service_km: v?.next_service_km != null ? String(v.next_service_km) : "",
+    service_interval_km: String(v?.service_interval_km ?? 10000),
+    last_service_date: "",
+    last_service_km: "",
     notes: v?.notes ?? "",
   };
 }
 
-export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle; familyId: string; photoUrl?: string | null }) {
+export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { vehicle?: Vehicle; familyId: string; photoUrl?: string | null; hasLogs?: boolean }) {
   const router = useRouter();
   const toast = useToast();
   const [f, setF] = useState(() => initialState(vehicle));
@@ -142,6 +145,7 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
         const up = await uploadVehiclePhoto(familyId, vid, photo.blob);
         if (!up.ok) toast(`הרכב נשמר, אבל ${up.error}`, { type: "error" });
       }
+      if ("warning" in res && res.warning) toast(res.warning, { type: "error" });
       const name = f.nickname.trim() || `${f.make.trim()} ${f.model.trim()}`;
       toast(editing ? "פרטי הרכב עודכנו." : `״${name}״ נוסף למשפחה.`);
       router.push(`/vehicles/${vid}`);
@@ -219,6 +223,19 @@ export function VehicleForm({ vehicle, familyId, photoUrl }: { vehicle?: Vehicle
           <Field id="next_service_km" label={`טיפול הבא בקילומטראז׳ (${KM})`} error={errors.next_service_km} hint="אפשר להשאיר ריק. אחרי ״בוצע טיפול״ הערך מתעדכן לבד.">
             <NumberInput id="next_service_km" value={f.next_service_km} error={errors.next_service_km} onChange={(v) => set("next_service_km", v)} />
           </Field>
+          <Field id="service_interval_km" label={`מרווח בין טיפולים (${KM})`} error={errors.service_interval_km} hint="ברירת מחדל 10,000. משפיע על ההערכה ועל חישוב הטיפול הבא.">
+            <NumberInput id="service_interval_km" value={f.service_interval_km} error={errors.service_interval_km} onChange={(v) => set("service_interval_km", v)} />
+          </Field>
+          {!hasLogs ? (
+            <>
+              <Field id="last_service_date" label="טיפול אחרון – תאריך" error={errors.last_service_date} hint="אפשר להשאיר ריק. אם ימולא, יתועד טיפול ראשון והטיפול הבא יחושב ממנו.">
+                <DateInput id="last_service_date" value={f.last_service_date} error={errors.last_service_date} onChange={(v) => set("last_service_date", v)} />
+              </Field>
+              <Field id="last_service_km" label={`טיפול אחרון – ${KM}`} error={errors.last_service_km}>
+                <NumberInput id="last_service_km" value={f.last_service_km} error={errors.last_service_km} onChange={(v) => set("last_service_km", v)} />
+              </Field>
+            </>
+          ) : null}
           <div className="sm:col-span-2">
             <Field id="notes" label="הערות" error={errors.notes}>
               <TextArea id="notes" rows={3} maxLength={2000} value={f.notes} error={errors.notes} onChange={(e) => set("notes", e.target.value)} />

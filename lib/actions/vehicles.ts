@@ -17,7 +17,7 @@ function revalidateVehicle(id?: string) {
   if (id) revalidatePath(`/vehicles/${id}`);
 }
 
-export async function createVehicle(input: VehicleInput): Promise<ActionResult<{ id: string }>> {
+export async function createVehicle(input: VehicleInput): Promise<ActionResult<{ id: string; warning?: string }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
   if (s.role !== "admin") return fail("הוספת רכב פתוחה למנהלי המשפחה בלבד.");
@@ -25,21 +25,37 @@ export async function createVehicle(input: VehicleInput): Promise<ActionResult<{
   const parsed = vehicleSchema.safeParse(input);
   if (!parsed.success) return zodFail(parsed.error);
 
+  const { last_service_date, last_service_km, ...fields } = parsed.data;
+
   // family_id comes from the database membership, never from the client.
   const { data, error } = await s.supabase
     .from("vehicles")
-    .insert({ ...parsed.data, family_id: s.familyId, mileage_updated_at: todayInIsrael() })
+    .insert({ ...fields, family_id: s.familyId, mileage_updated_at: todayInIsrael() })
     .select("id")
     .single();
   if (error) {
     const message = dbErrorMessage(error, "create_vehicle");
     return fail(message, error.code === "23505" ? { plate: message } : undefined);
   }
+
+  // Optional "last service": create the initial log through the existing RPC so next service is computed.
+  let warning: string | undefined;
+  if (last_service_date && last_service_km !== null) {
+    const rpc = await s.supabase.rpc("complete_service", {
+      p_vehicle_id: data.id,
+      p_date: last_service_date,
+      p_mileage: last_service_km,
+      p_garage: null,
+      p_cost: null,
+      p_notes: null,
+    });
+    if (rpc.error) warning = `הרכב נשמר, אבל לא הצלחנו לתעד את הטיפול האחרון: ${dbErrorMessage(rpc.error, "initial_service")}`;
+  }
   revalidateVehicle(data.id);
-  return { ok: true, id: data.id };
+  return { ok: true, id: data.id, warning };
 }
 
-export async function updateVehicle(id: string, input: VehicleInput): Promise<ActionResult> {
+export async function updateVehicle(id: string, input: VehicleInput): Promise<ActionResult<{ warning?: string }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
   const vid = uuidSchema.safeParse(id);
@@ -48,13 +64,14 @@ export async function updateVehicle(id: string, input: VehicleInput): Promise<Ac
   const parsed = vehicleSchema.safeParse(input);
   if (!parsed.success) return zodFail(parsed.error);
 
-  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage").eq("id", vid.data).maybeSingle();
+  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage, service_interval_km").eq("id", vid.data).maybeSingle();
   if (readError) return fail(dbErrorMessage(readError, "update_vehicle_read"));
   if (!current) return fail(NOT_FOUND);
 
+  const { last_service_date, last_service_km, ...fields } = parsed.data;
   const patch = {
-    ...parsed.data,
-    ...(parsed.data.mileage !== current.mileage ? { mileage_updated_at: todayInIsrael() } : {}),
+    ...fields,
+    ...(fields.mileage !== current.mileage ? { mileage_updated_at: todayInIsrael() } : {}),
   };
   const { data, error } = await s.supabase.from("vehicles").update(patch).eq("id", vid.data).select("id");
   if (error) {
@@ -62,8 +79,28 @@ export async function updateVehicle(id: string, input: VehicleInput): Promise<Ac
     return fail(message, error.code === "23505" ? { plate: message } : undefined);
   }
   if (!data?.length) return fail(FORBIDDEN);
+
+  // Initial "last service": only when the vehicle has no service history yet (avoids duplicates).
+  let warning: string | undefined;
+  if (last_service_date && last_service_km !== null) {
+    const { count } = await s.supabase.from("service_logs").select("id", { count: "exact", head: true }).eq("vehicle_id", vid.data);
+    if (!count) {
+      const rpc = await s.supabase.rpc("complete_service", {
+        p_vehicle_id: vid.data,
+        p_date: last_service_date,
+        p_mileage: last_service_km,
+        p_garage: null,
+        p_cost: null,
+        p_notes: null,
+      });
+      if (rpc.error) warning = `הפרטים נשמרו, אבל לא הצלחנו לתעד את הטיפול האחרון: ${dbErrorMessage(rpc.error, "initial_service")}`;
+    }
+  } else if (fields.service_interval_km !== current.service_interval_km) {
+    // The interval changed: recompute next_service_km from the latest log (no-op without logs).
+    await s.supabase.rpc("recompute_next_service", { p_vehicle_id: vid.data });
+  }
   revalidateVehicle(vid.data);
-  return { ok: true };
+  return { ok: true, warning };
 }
 
 export async function deleteVehicle(id: string): Promise<ActionResult> {

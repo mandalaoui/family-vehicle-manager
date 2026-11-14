@@ -27,6 +27,23 @@ const dateOptional = z
     return iso;
   });
 
+const dateOptionalNotFuture = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    if (v === "") return null;
+    const iso = parseDMY(v);
+    if (!iso) {
+      ctx.addIssue({ code: "custom", message: DATE_MSG });
+      return z.NEVER;
+    }
+    if (iso > todayInIsrael()) {
+      ctx.addIssue({ code: "custom", message: "התאריך לא יכול להיות בעתיד" });
+      return z.NEVER;
+    }
+    return iso;
+  });
+
 const dateRequiredNotFuture = (requiredMsg: string) =>
   z
     .string()
@@ -81,7 +98,9 @@ export const plateField = z
 const FUEL = ["petrol", "diesel", "hybrid", "plug_in", "electric"] as const;
 const MAX_KM = 2_000_000;
 
-export const vehicleSchema = z.object({
+export const DEFAULT_SERVICE_INTERVAL = 10000;
+
+const vehicleBase = z.object({
   nickname: optionalText(60, "הכינוי"),
   plate: plateField,
   make: requiredText(40, "הזינו יצרן", "שם היצרן"),
@@ -115,9 +134,22 @@ export const vehicleSchema = z.object({
   license_due: dateOptional,
   insurance_due: dateOptional,
   next_service_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
+  service_interval_km: intField("הזינו כל כמה ק״מ מבצעים טיפול", 100_000, "המרווח גבוה מדי. בדקו את המספר").pipe(
+    z.number().min(1000, "מרווח הטיפול צריך להיות לפחות 1,000 ק״מ"),
+  ),
+  last_service_date: dateOptionalNotFuture,
+  last_service_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
   notes: optionalText(2000, "ההערות"),
 });
-export type VehicleInput = z.input<typeof vehicleSchema>;
+export const vehicleSchema = vehicleBase.superRefine((v, ctx) => {
+  if ((v.last_service_date === null) !== (v.last_service_km === null)) {
+    const path = v.last_service_date === null ? "last_service_date" : "last_service_km";
+    ctx.addIssue({ code: "custom", path: [path], message: "מלאו גם תאריך וגם קילומטראז׳ של הטיפול האחרון, או השאירו את שניהם ריקים" });
+  } else if (v.last_service_km !== null && v.last_service_km > v.mileage) {
+    ctx.addIssue({ code: "custom", path: ["last_service_km"], message: "הטיפול האחרון לא יכול להיות בקילומטראז׳ גבוה מהקילומטראז׳ הנוכחי" });
+  }
+});
+export type VehicleInput = z.input<typeof vehicleBase>;
 
 export const mileageSchema = z.object({
   mileage: intField("הזינו את הקילומטראז׳ מלוח השעונים", MAX_KM, "הקילומטראז׳ גבוה מדי. בדקו את המספר"),

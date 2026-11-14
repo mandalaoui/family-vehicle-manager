@@ -1,4 +1,4 @@
-import { daysBetween, formatDate, formatDays, formatNumber, KM } from "./format";
+import { addMonths, daysBetween, formatDate, formatDays, formatNumber, KM, todayInIsrael } from "./format";
 
 // Pure, server-side friendly alert logic. `today` is an ISO date in Asia/Jerusalem.
 export type AlertLevel = "overdue" | "urgent" | "soon" | "ok";
@@ -24,6 +24,9 @@ export interface AlertVehicle {
   mileage: number;
   mileage_updated_at: string;
   next_service_km: number | null;
+  service_interval_km: number;
+  /** ISO timestamp; the 12-month fallback for an estimate counts from here. */
+  created_at: string;
 }
 
 export interface VehicleAlert {
@@ -33,6 +36,34 @@ export interface VehicleAlert {
   detail: string;
   /** Lower = more pressing within the same level. */
   sort: number;
+  /** True when computed without any real service log (shown as "הערכה"). */
+  estimated?: boolean;
+}
+
+export const ESTIMATE_MONTHS = 12;
+
+export interface ServiceEstimate {
+  nextKm: number;
+  nextDate: string;
+  kmLeft: number;
+  daysLeft: number;
+  level: AlertLevel;
+}
+
+/**
+ * Estimate used while there is no service history: the next multiple of the service interval above the
+ * current mileage, or 12 months after the vehicle was added, whichever comes first. The date side counts
+ * from the vehicle's creation (a "12 months from today" target would move every day and never fire).
+ */
+export function estimateService(v: Pick<AlertVehicle, "mileage" | "service_interval_km" | "created_at">, today: string): ServiceEstimate {
+  const interval = Math.max(1, v.service_interval_km);
+  const nextKm = (Math.floor(v.mileage / interval) + 1) * interval;
+  const kmLeft = nextKm - v.mileage;
+  const nextDate = addMonths(todayInIsrael(new Date(v.created_at)), ESTIMATE_MONTHS);
+  const daysLeft = daysBetween(today, nextDate);
+  const kmLvl = serviceLevel(kmLeft);
+  const dateLvl = dateLevel(daysLeft);
+  return { nextKm, nextDate, kmLeft, daysLeft, level: LEVEL_RANK[kmLvl] <= LEVEL_RANK[dateLvl] ? kmLvl : dateLvl };
 }
 
 export function dateLevel(days: number): AlertLevel {
@@ -89,6 +120,18 @@ export function getVehicleAlerts(v: AlertVehicle, today: string): VehicleAlert[]
           ? `עוד ${formatNumber(kmLeft)} ${KM} (בקילומטראז׳ ${formatNumber(v.next_service_km)})`
           : `חריגה של ${formatNumber(-kmLeft)} ${KM}`,
       sort: kmLeft / 50, // roughly comparable with days
+    });
+  }
+
+  if (v.next_service_km == null) {
+    const est = estimateService(v, today);
+    alerts.push({
+      kind: "service",
+      title: "טיפול תקופתי (הערכה)",
+      level: est.level,
+      detail: `הערכה: בקילומטראז׳ ${formatNumber(est.nextKm)} (עוד ${formatNumber(est.kmLeft)} ${KM}) או עד ${formatDate(est.nextDate)}, המוקדם מביניהם`,
+      sort: Math.min(est.kmLeft / 50, est.daysLeft),
+      estimated: true,
     });
   }
 

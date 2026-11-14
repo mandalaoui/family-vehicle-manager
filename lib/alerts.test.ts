@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { dateLevel, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
+import { dateLevel, estimateService, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
 import { addMonths, daysBetween, formatDate, formatPlate, maskDate, parseDMY, todayInIsrael } from "./format";
 
 const today = "2026-11-14";
+// Vehicles without a service log always carry an (ok-level) estimate; most tests ignore it.
+const noEstimate = (alerts: ReturnType<typeof getVehicleAlerts>) => alerts.filter((a) => !a.estimated);
 const base: AlertVehicle = {
   license_due: null,
   insurance_due: null,
   mileage: 50000,
   mileage_updated_at: today,
   next_service_km: null,
+  service_interval_km: 10000,
+  created_at: "2026-06-01T10:00:00Z",
 };
 
 describe("dateLevel", () => {
@@ -24,13 +28,38 @@ describe("dateLevel", () => {
 
 describe("test + license is one concept", () => {
   it("produces a single alert for license_due", () => {
-    const alerts = getVehicleAlerts({ ...base, license_due: "2026-11-20" }, today);
+    const alerts = noEstimate(getVehicleAlerts({ ...base, license_due: "2026-11-20" }, today));
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ kind: "license", title: "טסט וחידוש רישיון", level: "urgent" });
   });
   it("keeps insurance separate", () => {
-    const alerts = getVehicleAlerts({ ...base, license_due: "2026-11-20", insurance_due: "2026-11-20" }, today);
+    const alerts = noEstimate(getVehicleAlerts({ ...base, license_due: "2026-11-20", insurance_due: "2026-11-20" }, today));
     expect(alerts.map((a) => a.kind).sort()).toEqual(["insurance", "license"]);
+  });
+});
+
+describe("service estimate (no history)", () => {
+  it("uses the next multiple of the interval above the mileage", () => {
+    const e = estimateService({ mileage: 54321, service_interval_km: 10000, created_at: "2026-06-01T10:00:00Z" }, today);
+    expect(e.nextKm).toBe(60000);
+    expect(e.kmLeft).toBe(5679);
+    expect(e.nextDate).toBe("2027-06-01");
+  });
+  it("respects a per-vehicle interval and exact multiples", () => {
+    expect(estimateService({ mileage: 15000, service_interval_km: 15000, created_at: "2026-06-01T10:00:00Z" }, today).nextKm).toBe(30000);
+    expect(estimateService({ mileage: 0, service_interval_km: 10000, created_at: "2026-06-01T10:00:00Z" }, today).nextKm).toBe(10000);
+  });
+  it("takes the worse of km and date", () => {
+    // 9,950 km -> 50 km left -> urgent, even though the date is far away
+    expect(estimateService({ mileage: 9950, service_interval_km: 10000, created_at: "2026-06-01T10:00:00Z" }, today).level).toBe("urgent");
+    // plenty of km left, but added 13 months ago -> overdue by date
+    expect(estimateService({ mileage: 1000, service_interval_km: 10000, created_at: "2025-09-01T10:00:00Z" }, today).level).toBe("overdue");
+  });
+  it("is flagged as an estimate and disappears once a real service exists", () => {
+    const withEstimate = getVehicleAlerts({ ...base, mileage: 9950 }, today).find((a) => a.kind === "service");
+    expect(withEstimate).toMatchObject({ estimated: true, level: "urgent" });
+    const real = getVehicleAlerts({ ...base, mileage: 9950, next_service_km: 20000 }, today).find((a) => a.kind === "service");
+    expect(real?.estimated).toBeUndefined();
   });
 });
 
@@ -46,19 +75,19 @@ describe("serviceLevel", () => {
 });
 
 describe("getVehicleAlerts", () => {
-  it("returns nothing for a vehicle with no data and fresh mileage", () => {
-    expect(getVehicleAlerts(base, today)).toEqual([]);
+  it("returns nothing for a vehicle with no data and fresh mileage (estimate is far away)", () => {
+    expect(getVehicleAlerts({ ...base, mileage: 50000 }, today).filter((a) => a.level !== "ok")).toEqual([]);
   });
 
   it("sorts overdue before urgent", () => {
-    const alerts = getVehicleAlerts(
+    const alerts = noEstimate(getVehicleAlerts(
       {
         ...base,
         license_due: "2026-11-10", // -4 -> overdue
         insurance_due: "2026-11-18", // 4 -> urgent
       },
       today,
-    );
+    ));
     expect(alerts.map((a) => a.level)).toEqual(["overdue", "urgent"]);
     expect(alerts.map((a) => a.kind)).toEqual(["license", "insurance"]);
   });
@@ -75,7 +104,7 @@ describe("getVehicleAlerts", () => {
   it("does not flag mileage updated exactly 60 days ago", () => {
     const sixty = "2026-09-15";
     expect(daysBetween(sixty, today)).toBe(60);
-    expect(getVehicleAlerts({ ...base, mileage_updated_at: sixty }, today)).toEqual([]);
+    expect(noEstimate(getVehicleAlerts({ ...base, mileage_updated_at: sixty }, today))).toEqual([]);
   });
 });
 
