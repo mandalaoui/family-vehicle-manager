@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateLevel, estimateService, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
+import { batteryEstimate, dateLevel, estimateService, tiresEstimate, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
 import { addMonths, daysBetween, formatDate, formatPlate, maskDate, parseDMY, todayInIsrael } from "./format";
 
 const today = "2026-11-14";
@@ -129,5 +129,54 @@ describe("format helpers", () => {
     // 22:30 UTC on 14 Nov is already 00:30 on 15 Nov in Israel (UTC+2).
     expect(todayInIsrael(new Date("2026-11-14T22:30:00Z"))).toBe("2026-11-15");
     expect(todayInIsrael(new Date("2026-11-14T10:00:00Z"))).toBe("2026-11-14");
+  });
+});
+
+describe("battery reminder", () => {
+  it("is absent without a replacement date", () => {
+    expect(getVehicleAlerts(base, today).some((a) => a.kind === "battery")).toBe(false);
+    expect(batteryEstimate({ battery_replaced_at: null, battery_reminder_months: 36 }, today)).toBeNull();
+  });
+  it("defaults to 36 months and is labeled as an estimate", () => {
+    const e = batteryEstimate({ battery_replaced_at: "2023-12-01" }, today)!;
+    expect(e.dueDate).toBe("2026-12-01");
+    expect(e.level).toBe("soon"); // 17 days
+    const alert = getVehicleAlerts({ ...base, battery_replaced_at: "2023-12-01" }, today).find((a) => a.kind === "battery")!;
+    expect(alert.estimated).toBe(true);
+    expect(alert.title).toContain("הערכה");
+  });
+  it("honors a custom interval", () => {
+    expect(batteryEstimate({ battery_replaced_at: "2026-01-15", battery_reminder_months: 6 }, today)!.level).toBe("overdue");
+  });
+});
+
+describe("tires reminder", () => {
+  const tires = { mileage: 90000, tires_reminder_months: 48, tires_reminder_km: 50000 };
+  it("is absent without any date", () => {
+    expect(tiresEstimate({ ...tires, tires_replaced_at: null, tires_separate: false, tire_fl_at: null, tire_fr_at: null, tire_rl_at: null, tire_rr_at: null, tires_replaced_km: null }, today)).toBeNull();
+  });
+  it("by months only when no km is recorded", () => {
+    const e = tiresEstimate({ ...tires, tires_replaced_at: "2022-12-01", tires_replaced_km: null }, today)!;
+    expect(e.dueDate).toBe("2026-12-01");
+    expect(e.kmLeft).toBeNull();
+    expect(e.level).toBe("soon");
+  });
+  it("km can fire before the date (whichever comes first)", () => {
+    const e = tiresEstimate({ ...tires, tires_replaced_at: "2026-06-01", tires_replaced_km: 40500 }, today)!;
+    expect(e.dueKm).toBe(90500);
+    expect(e.kmLeft).toBe(500);
+    expect(e.level).toBe("soon"); // 500 km left, date is far away
+  });
+  it("separate wheels use the oldest date", () => {
+    const e = tiresEstimate(
+      { ...tires, tires_separate: true, tires_replaced_at: "2026-01-01", tire_fl_at: "2026-05-01", tire_fr_at: "2026-05-01", tire_rl_at: "2022-10-01", tire_rr_at: null, tires_replaced_km: null },
+      today,
+    )!;
+    expect(e.oldestDate).toBe("2022-10-01");
+    expect(e.level).toBe("overdue");
+  });
+  it("ignores the single date when wheels are separate", () => {
+    const e = tiresEstimate({ ...tires, tires_separate: true, tires_replaced_at: "2020-01-01", tire_fl_at: "2026-10-01", tire_fr_at: null, tire_rl_at: null, tire_rr_at: null, tires_replaced_km: null }, today)!;
+    expect(e.oldestDate).toBe("2026-10-01");
   });
 });

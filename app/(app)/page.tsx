@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, CircleCheck, FileCheck, Gauge, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
+import { BatteryCharging, ChevronLeft, CircleCheck, CircleDot, FileCheck, Gauge, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
 import { VehicleCard, vehicleName } from "@/components/vehicles/VehicleCard";
 import { LinkButton } from "@/components/ui/Button";
 import { EmptyState, ScreenHeader } from "@/components/ui/Layout";
@@ -18,6 +18,8 @@ const ALERT_ICONS: Record<AlertKind, LucideIcon> = {
   insurance: ShieldCheck,
   service: Wrench,
   mileage: Gauge,
+  battery: BatteryCharging,
+  tires: CircleDot,
 };
 
 export default async function DashboardPage() {

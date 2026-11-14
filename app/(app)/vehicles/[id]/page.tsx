@@ -6,14 +6,14 @@ import { VehiclePhotoControl } from "@/components/vehicles/VehiclePhotoControl";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { LastTestInfo } from "@/components/vehicles/LastTestInfo";
 import Link from "next/link";
-import { ClipboardList, FileCheck, Gauge, ShieldPlus, StickyNote, Wrench } from "lucide-react";
+import { BatteryCharging, CircleDot, ClipboardList, FileCheck, Gauge, ShieldPlus, StickyNote, Wrench } from "lucide-react";
 import { vehicleName } from "@/components/vehicles/VehicleCard";
 import { ServiceHistory } from "@/components/vehicles/ServiceHistory";
 import { VehicleTopBar } from "@/components/vehicles/VehicleTopBar";
 import { Row, Section } from "@/components/ui/Layout";
 import { Ltr, Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
-import { describeDays, estimateService, isMileageStale, serviceLevel } from "@/lib/alerts";
+import { batteryEstimate, describeDays, estimateService, tiresEstimate, isMileageStale, serviceLevel } from "@/lib/alerts";
 import { daysBetween, formatDate, formatNumber, FUEL_LABELS, KM, todayInIsrael } from "@/lib/format";
 import { requireMembership } from "@/lib/server/context";
 import { uuidSchema } from "@/lib/validation";
@@ -70,6 +70,8 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
   const stale = isMileageStale(v, today);
   const estimate = estimateService(v, today);
   const kmLeft = v.next_service_km != null ? v.next_service_km - v.mileage : null;
+  const battery = batteryEstimate(v, today);
+  const tires = tiresEstimate(v, today);
   const garages = [...new Set((logs ?? []).map((l) => l.garage).filter((g): g is string => Boolean(g)))];
 
   return (
@@ -203,6 +205,88 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
             עודכן ב־<Ltr>{formatDate(v.mileage_updated_at)}</Ltr>
             {age > 0 ? ` · לפני ${age} ימים` : " · היום"}
           </p>
+        </Section>
+
+
+        <Section icon={BatteryCharging} title="מצבר">
+          {v.battery_replaced_at ? (
+            <div className="divide-y divide-silver-200">
+              <Row label="הוחלף ב־">
+                <Ltr>{formatDate(v.battery_replaced_at)}</Ltr>
+              </Row>
+              {battery ? (
+                <div className="flex flex-col gap-1 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Status level={battery.level} />
+                    <span className="inline-flex items-center rounded-full border border-silver-300 bg-silver-50 px-2.5 py-0.5 text-xs font-bold">הערכה</span>
+                  </div>
+                  <p className="text-sm text-muted">
+                    בדיקה מומלצת סביב <Ltr>{formatDate(battery.dueDate)}</Ltr> ({describeDays(battery.daysLeft)}), {v.battery_reminder_months} חודשים אחרי ההחלפה.
+                  </p>
+                </div>
+              ) : null}
+              {v.battery_warranty_until ? (
+                <Row label="תוקף אחריות">
+                  <Ltr>{formatDate(v.battery_warranty_until)}</Ltr>
+                </Row>
+              ) : null}
+              {v.battery_notes ? <p className="whitespace-pre-wrap break-words py-2 text-sm">{v.battery_notes}</p> : null}
+            </div>
+          ) : (
+            <Link href={`/vehicles/${v.id}/edit`} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-brand underline">
+              הוסיפו תאריך החלפת מצבר
+            </Link>
+          )}
+        </Section>
+
+        <Section icon={CircleDot} title="צמיגים">
+          {tires ? (
+            <div className="divide-y divide-silver-200">
+              {v.tires_separate ? (
+                <>
+                  {([
+                    ["קדמי ימני", v.tire_fr_at],
+                    ["קדמי שמאלי", v.tire_fl_at],
+                    ["אחורי ימני", v.tire_rr_at],
+                    ["אחורי שמאלי", v.tire_rl_at],
+                  ] as const).map(([label, d]) => (
+                    <Row key={label} label={label}>
+                      {d ? <Ltr>{formatDate(d)}</Ltr> : <span className="text-muted">לא הוזן</span>}
+                    </Row>
+                  ))}
+                </>
+              ) : (
+                <Row label="הוחלפו ב־">
+                  <Ltr>{formatDate(v.tires_replaced_at)}</Ltr>
+                </Row>
+              )}
+              {v.tires_replaced_km != null ? (
+                <Row label="בקילומטראז׳">
+                  <Ltr>{formatNumber(v.tires_replaced_km)}</Ltr> {KM}
+                </Row>
+              ) : null}
+              <div className="flex flex-col gap-1 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Status level={tires.level} />
+                  <span className="inline-flex items-center rounded-full border border-silver-300 bg-silver-50 px-2.5 py-0.5 text-xs font-bold">הערכה</span>
+                </div>
+                <p className="text-sm text-muted">
+                  בדיקה מומלצת סביב <Ltr>{formatDate(tires.dueDate)}</Ltr> ({describeDays(tires.daysLeft)})
+                  {tires.kmLeft != null && tires.dueKm != null ? (
+                    <>
+                      {" "}
+                      או בקילומטראז׳ <Ltr>{formatNumber(tires.dueKm)}</Ltr> {KM}
+                    </>
+                  ) : null}
+                  , המוקדם מביניהם.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <Link href={`/vehicles/${v.id}/edit`} className="inline-flex min-h-[44px] items-center text-sm font-semibold text-brand underline">
+              הוסיפו תאריך החלפת צמיגים
+            </Link>
+          )}
         </Section>
 
         {v.notes ? (

@@ -40,6 +40,19 @@ function initialState(v?: Vehicle) {
     last_service_date: "",
     last_service_km: "",
     notes: v?.notes ?? "",
+    battery_replaced_at: dateValue(v?.battery_replaced_at),
+    battery_warranty_until: dateValue(v?.battery_warranty_until),
+    battery_notes: v?.battery_notes ?? "",
+    battery_reminder_months: String(v?.battery_reminder_months ?? 36),
+    tires_separate: v?.tires_separate ?? false,
+    tires_replaced_at: dateValue(v?.tires_replaced_at),
+    tire_fl_at: dateValue(v?.tire_fl_at),
+    tire_fr_at: dateValue(v?.tire_fr_at),
+    tire_rl_at: dateValue(v?.tire_rl_at),
+    tire_rr_at: dateValue(v?.tire_rr_at),
+    tires_replaced_km: v?.tires_replaced_km != null ? String(v.tires_replaced_km) : "",
+    tires_reminder_months: String(v?.tires_reminder_months ?? 48),
+    tires_reminder_km: String(v?.tires_reminder_km ?? 50000),
   };
 }
 
@@ -129,10 +142,13 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
       for (const k of keys) delete next[k];
       return next;
     });
-  const set = (k: keyof typeof f, v: string) => {
+  const set = (k: Exclude<keyof typeof f, "tires_separate">, v: string) => {
     setF((p) => ({ ...p, [k]: v }));
     clearErrors(k);
   };
+  const hasBatteryTires = Boolean(
+    vehicle && (vehicle.battery_replaced_at || vehicle.battery_warranty_until || vehicle.battery_notes || vehicle.tires_replaced_at || vehicle.tires_separate || vehicle.tires_replaced_km != null),
+  );
   const cancelHref = vehicle ? `/vehicles/${vehicle.id}` : "/";
 
   function submit(e: React.FormEvent) {
@@ -247,6 +263,79 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
           </div>
         </div>
       </section>
+
+
+      <details open={hasBatteryTires || undefined} className="group rounded-2xl border border-silver-300 bg-white p-4 shadow-sm sm:p-5">
+        <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between text-base font-bold">
+          מצבר וצמיגים (אופציונלי)
+          <span className="text-sm font-normal text-muted group-open:hidden">לחצו כדי להרחיב</span>
+        </summary>
+        <div className="mt-4 flex flex-col gap-5">
+          <div>
+            <h3 className="mb-3 text-sm font-bold">מצבר</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="battery_replaced_at" label="תאריך החלפת מצבר" error={errors.battery_replaced_at} hint="אפשר להשאיר ריק">
+                <DateInput id="battery_replaced_at" value={f.battery_replaced_at} error={errors.battery_replaced_at} onChange={(v) => set("battery_replaced_at", v)} />
+              </Field>
+              <Field id="battery_warranty_until" label="תוקף אחריות מצבר" error={errors.battery_warranty_until} hint="אפשר להשאיר ריק. מוצג כמידע בלבד.">
+                <DateInput id="battery_warranty_until" value={f.battery_warranty_until} error={errors.battery_warranty_until} onChange={(v) => set("battery_warranty_until", v)} />
+              </Field>
+              <Field id="battery_reminder_months" label="תזכורת לבדיקת מצבר אחרי (חודשים)" error={errors.battery_reminder_months} hint="ברירת מחדל 36. התזכורת היא הערכה בלבד.">
+                <NumberInput id="battery_reminder_months" value={f.battery_reminder_months} error={errors.battery_reminder_months} onChange={(v) => set("battery_reminder_months", v)} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field id="battery_notes" label="הערות על המצבר" error={errors.battery_notes}>
+                  <TextArea id="battery_notes" rows={2} maxLength={1000} value={f.battery_notes} error={errors.battery_notes} onChange={(e) => set("battery_notes", e.target.value)} />
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-3 text-sm font-bold">צמיגים</h3>
+            <label className="mb-3 flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-semibold">
+              <input
+                type="checkbox"
+                className="h-5 w-5 accent-brand"
+                checked={f.tires_separate}
+                onChange={(e) => setF((p) => ({ ...p, tires_separate: e.target.checked }))}
+              />
+              תאריך נפרד לכל גלגל
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {f.tires_separate ? (
+                <>
+                  <Field id="tire_fr_at" label="קדמי ימני" error={errors.tire_fr_at}>
+                    <DateInput id="tire_fr_at" value={f.tire_fr_at} error={errors.tire_fr_at} onChange={(v) => set("tire_fr_at", v)} />
+                  </Field>
+                  <Field id="tire_fl_at" label="קדמי שמאלי" error={errors.tire_fl_at}>
+                    <DateInput id="tire_fl_at" value={f.tire_fl_at} error={errors.tire_fl_at} onChange={(v) => set("tire_fl_at", v)} />
+                  </Field>
+                  <Field id="tire_rr_at" label="אחורי ימני" error={errors.tire_rr_at}>
+                    <DateInput id="tire_rr_at" value={f.tire_rr_at} error={errors.tire_rr_at} onChange={(v) => set("tire_rr_at", v)} />
+                  </Field>
+                  <Field id="tire_rl_at" label="אחורי שמאלי" error={errors.tire_rl_at}>
+                    <DateInput id="tire_rl_at" value={f.tire_rl_at} error={errors.tire_rl_at} onChange={(v) => set("tire_rl_at", v)} />
+                  </Field>
+                </>
+              ) : (
+                <Field id="tires_replaced_at" label="תאריך החלפת צמיגים" error={errors.tires_replaced_at} hint="אפשר להשאיר ריק">
+                  <DateInput id="tires_replaced_at" value={f.tires_replaced_at} error={errors.tires_replaced_at} onChange={(v) => set("tires_replaced_at", v)} />
+                </Field>
+              )}
+              <Field id="tires_replaced_km" label={`קילומטראז׳ בהחלפה (${KM})`} error={errors.tires_replaced_km} hint="אפשר להשאיר ריק. בלי ק״מ התזכורת היא לפי חודשים בלבד.">
+                <NumberInput id="tires_replaced_km" value={f.tires_replaced_km} error={errors.tires_replaced_km} onChange={(v) => set("tires_replaced_km", v)} />
+              </Field>
+              <Field id="tires_reminder_months" label="תזכורת אחרי (חודשים)" error={errors.tires_reminder_months} hint="ברירת מחדל 48.">
+                <NumberInput id="tires_reminder_months" value={f.tires_reminder_months} error={errors.tires_reminder_months} onChange={(v) => set("tires_reminder_months", v)} />
+              </Field>
+              <Field id="tires_reminder_km" label={`או אחרי (${KM})`} error={errors.tires_reminder_km} hint="ברירת מחדל 50,000. המוקדם מביניהם, כהערכה.">
+                <NumberInput id="tires_reminder_km" value={f.tires_reminder_km} error={errors.tires_reminder_km} onChange={(v) => set("tires_reminder_km", v)} />
+              </Field>
+            </div>
+          </div>
+        </div>
+      </details>
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
         <LinkButton href={cancelHref} variant="neutral">
