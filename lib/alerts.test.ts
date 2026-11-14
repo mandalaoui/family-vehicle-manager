@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { batteryEstimate, dateLevel, estimateService, tiresEstimate, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
+import { batteryEstimate, wheelStatus, dateLevel, estimateService, tiresEstimate, getVehicleAlerts, serviceLevel, type AlertVehicle } from "./alerts";
 import { addMonths, daysBetween, formatDate, formatPlate, maskDate, parseDMY, todayInIsrael } from "./format";
 
 const today = "2026-11-14";
@@ -178,5 +178,21 @@ describe("tires reminder", () => {
   it("ignores the single date when wheels are separate", () => {
     const e = tiresEstimate({ ...tires, tires_separate: true, tires_replaced_at: "2020-01-01", tire_fl_at: "2026-10-01", tire_fr_at: null, tire_rl_at: null, tire_rr_at: null, tires_replaced_km: null }, today)!;
     expect(e.oldestDate).toBe("2026-10-01");
+  });
+});
+
+describe("wheelStatus", () => {
+  const v = { mileage: 90000, tires_replaced_km: null, tires_reminder_months: 48, tires_reminder_km: 50000 };
+  it("is null without a date", () => {
+    expect(wheelStatus(null, v, today)).toEqual({ level: null, dueDate: null });
+  });
+  it("uses the wheel's own date", () => {
+    expect(wheelStatus("2026-01-01", v, today).level).toBe("ok");
+    expect(wheelStatus("2022-12-01", v, today).level).toBe("soon");
+    expect(wheelStatus("2022-01-01", v, today).level).toBe("overdue");
+  });
+  it("takes the worse of date and km", () => {
+    expect(wheelStatus("2026-06-01", { ...v, tires_replaced_km: 40500 }, today).level).toBe("soon");
+    expect(wheelStatus("2026-06-01", { ...v, tires_replaced_km: 30000 }, today).level).toBe("overdue");
   });
 });

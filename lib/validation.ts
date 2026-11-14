@@ -100,6 +100,36 @@ const MAX_KM = 2_000_000;
 
 export const DEFAULT_SERVICE_INTERVAL = 10000;
 
+const batteryShape = {
+  battery_replaced_at: dateOptionalNotFuture,
+  battery_warranty_until: dateOptional,
+  battery_notes: optionalText(1000, "הערות המצבר"),
+  battery_reminder_months: intField("הזינו כל כמה חודשים לבדוק מצבר", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
+    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
+  ),
+};
+
+const tiresShape = {
+  tires_separate: z.boolean(),
+  tires_replaced_at: dateOptionalNotFuture,
+  tire_fl_at: dateOptionalNotFuture,
+  tire_fr_at: dateOptionalNotFuture,
+  tire_rl_at: dateOptionalNotFuture,
+  tire_rr_at: dateOptionalNotFuture,
+  tires_replaced_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
+  tires_reminder_months: intField("הזינו כל כמה חודשים לבדוק צמיגים", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
+    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
+  ),
+  tires_reminder_km: intField("הזינו כל כמה ק״מ לבדוק צמיגים", 500_000, "המרווח גבוה מדי. בדקו את המספר").pipe(
+    z.number().min(1000, "המרווח צריך להיות לפחות 1,000 ק״מ"),
+  ),
+};
+
+const batteryObject = z.object(batteryShape);
+const tiresObject = z.object(tiresShape);
+export const batterySchema = batteryObject;
+export type BatteryInput = z.input<typeof batteryObject>;
+
 const vehicleBase = z.object({
   nickname: optionalText(60, "הכינוי"),
   plate: plateField,
@@ -140,27 +170,8 @@ const vehicleBase = z.object({
   last_service_date: dateOptionalNotFuture,
   last_service_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
   notes: optionalText(2000, "ההערות"),
-  // Battery
-  battery_replaced_at: dateOptionalNotFuture,
-  battery_warranty_until: dateOptional,
-  battery_notes: optionalText(1000, "הערות המצבר"),
-  battery_reminder_months: intField("הזינו כל כמה חודשים לבדוק מצבר", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
-    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
-  ),
-  // Tires
-  tires_separate: z.boolean(),
-  tires_replaced_at: dateOptionalNotFuture,
-  tire_fl_at: dateOptionalNotFuture,
-  tire_fr_at: dateOptionalNotFuture,
-  tire_rl_at: dateOptionalNotFuture,
-  tire_rr_at: dateOptionalNotFuture,
-  tires_replaced_km: intOptional(MAX_KM, "הערך גבוה מדי. בדקו את המספר"),
-  tires_reminder_months: intField("הזינו כל כמה חודשים לבדוק צמיגים", 120, "המרווח גבוה מדי (עד 120 חודשים)").pipe(
-    z.number().min(1, "המרווח צריך להיות לפחות חודש אחד"),
-  ),
-  tires_reminder_km: intField("הזינו כל כמה ק״מ לבדוק צמיגים", 500_000, "המרווח גבוה מדי. בדקו את המספר").pipe(
-    z.number().min(1000, "המרווח צריך להיות לפחות 1,000 ק״מ"),
-  ),
+  ...batteryShape,
+  ...tiresShape,
 });
 function vehicleChecks(v: z.output<typeof vehicleBase>, ctx: z.RefinementCtx) {
   if ((v.last_service_date === null) !== (v.last_service_km === null)) {
@@ -174,7 +185,7 @@ function vehicleChecks(v: z.output<typeof vehicleBase>, ctx: z.RefinementCtx) {
   }
 }
 
-function normalizeTires(v: z.output<typeof vehicleBase>) {
+function normalizeTires<T extends z.output<typeof tiresObject>>(v: T): T {
   return v.tires_separate
     ? { ...v, tires_replaced_at: null }
     : { ...v, tire_fl_at: null, tire_fr_at: null, tire_rl_at: null, tire_rr_at: null };
@@ -182,6 +193,10 @@ function normalizeTires(v: z.output<typeof vehicleBase>) {
 // Only one of the two tire modes is stored: a single date, or one date per wheel.
 export const vehicleSchema = vehicleBase.superRefine(vehicleChecks).transform(normalizeTires);
 export type VehicleInput = z.input<typeof vehicleBase>;
+
+/** Tires on their own (quick-edit modal): one date or one date per wheel, never both. */
+export const tiresSchema = tiresObject.transform(normalizeTires);
+export type TiresInput = z.input<typeof tiresObject>;
 
 export const mileageSchema = z.object({
   mileage: intField("הזינו את הקילומטראז׳ מלוח השעונים", MAX_KM, "הקילומטראז׳ גבוה מדי. בדקו את המספר"),
