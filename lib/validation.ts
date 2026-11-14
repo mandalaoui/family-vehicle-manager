@@ -191,6 +191,12 @@ export const serviceLogSchema = z.object({
   service_date: dateRequiredNotFuture("הזינו את תאריך הטיפול"),
   mileage: intField("הזינו את הקילומטראז׳ בעת הטיפול", MAX_KM, "הקילומטראז׳ גבוה מדי. בדקו את המספר"),
   garage: optionalText(80, "שם המוסך"),
+  garage_id: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .pipe(z.string().uuid("המוסך שנבחר לא תקין").nullable()),
   cost: z
     .string()
     .trim()
@@ -232,3 +238,21 @@ export const tokenSchema = z
   .trim()
   .regex(/^[A-Za-z0-9_-]{16,128}$/, "קישור ההזמנה לא תקין.");
 
+
+export const garageSchema = z.object({
+  name: requiredText(80, "הזינו שם מוסך", "שם המוסך"),
+  phone: z
+    .string()
+    .trim()
+    .transform((v, ctx) => {
+      if (v === "") return null;
+      if (!/^[0-9+()*\s-]{3,30}$/.test(v)) {
+        ctx.addIssue({ code: "custom", message: "הזינו מספר טלפון תקין, למשל 03-1234567" });
+        return z.NEVER;
+      }
+      return v;
+    }),
+  address: optionalText(200, "הכתובת"),
+  notes: optionalText(1000, "ההערות"),
+});
+export type GarageInput = z.input<typeof garageSchema>;

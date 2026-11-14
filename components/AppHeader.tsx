@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Car, Check, LogOut, Menu, Settings, X } from "lucide-react";
+import { Car, Check, LogOut, Menu, Settings, Wrench, X } from "lucide-react";
 
 const TABS = [
   { href: "/", label: "רכבים", icon: Car, match: (p: string) => p === "/" || p.startsWith("/vehicles") },
+  { href: "/garages", label: "מוסכים", icon: Wrench, match: (p: string) => p.startsWith("/garages") },
   { href: "/settings", label: "הגדרות", icon: Settings, match: (p: string) => p.startsWith("/settings") },
 ];
 

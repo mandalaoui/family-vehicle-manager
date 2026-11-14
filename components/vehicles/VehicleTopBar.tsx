@@ -32,6 +32,7 @@ export function VehicleTopBar({
   today,
   staleAge,
   garages,
+  familyGarages,
   undo,
 }: {
   vehicle: TopBarVehicle;
@@ -41,6 +42,7 @@ export function VehicleTopBar({
   /** Days since the last mileage reading when it is stale, otherwise null. */
   staleAge: number | null;
   garages: string[];
+  familyGarages: { id: string; name: string }[];
   /** Active (recent, still applicable) renewal undo info, computed by the server. */
   undo: RenewalUndoEntry | null;
 }) {
@@ -129,7 +131,7 @@ export function VehicleTopBar({
         <MileageModal vehicleId={v.id} mileage={v.mileage} updatedAt={v.mileage_updated_at} onClose={() => setModal(null)} />
       ) : null}
       {modal === "service" ? (
-        <ServiceModal vehicleId={v.id} vehicleName={v.name} currentMileage={v.mileage} today={today} garages={garages} onClose={() => setModal(null)} />
+        <ServiceModal vehicleId={v.id} vehicleName={v.name} currentMileage={v.mileage} today={today} garages={garages} familyGarages={familyGarages} onClose={() => setModal(null)} />
       ) : null}
       {modal === "delete" ? (
         <ConfirmModal

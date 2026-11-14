@@ -54,11 +54,13 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
 
   const supabase = await createClient();
 
-  const [ctx, { data: v }, { data: logs }] = await Promise.all([
+  const [ctx, { data: v }, { data: logs }, { data: garageRows }] = await Promise.all([
     requireMembership(),
     supabase.from("vehicles").select("*").eq("id", id).maybeSingle(),
     supabase.from("service_logs").select("*").eq("vehicle_id", id).order("service_date", { ascending: false }).order("mileage", { ascending: false }),
+    supabase.from("garages").select("id, name, family_id").order("name", { ascending: true }),
   ]);
+  const familyGarages = (garageRows ?? []).filter((g) => g.family_id === ctx.membership.familyId).map((g) => ({ id: g.id, name: g.name }));
   const isAdmin = ctx.membership.role === "admin";
   if (!v) notFound();
 
@@ -88,6 +90,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         today={today}
         staleAge={stale ? age : null}
         garages={garages}
+        familyGarages={familyGarages}
         undo={activeUndo(v, today)}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
@@ -296,7 +299,7 @@ export default async function VehiclePage({ params }: { params: Promise<{ id: st
         ) : null}
 
         <Section icon={ClipboardList} title="היסטוריית טיפולים" className="md:col-span-2">
-          <ServiceHistory vehicleId={v.id} vehicleName={name} currentMileage={v.mileage} today={today} logs={logs ?? []} />
+          <ServiceHistory vehicleId={v.id} vehicleName={name} currentMileage={v.mileage} today={today} logs={logs ?? []} familyGarages={familyGarages} />
         </Section>
       </div>
     </>
