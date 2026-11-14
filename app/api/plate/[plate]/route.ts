@@ -2,13 +2,21 @@ import { NextResponse } from "next/server";
 import { MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/errors";
 import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { getCurrentUser } from "@/lib/server/context";
+import { rateLimited } from "@/lib/server/rate-limit";
 import { plateField } from "@/lib/validation";
 
 
 // Signed-in users only, so this cannot be used as an open proxy.
 export async function GET(_req: Request, { params }: { params: Promise<{ plate: string }> }) {
-  if (!(await getCurrentUser())) {
+  const user = await getCurrentUser();
+  if (!user) {
     return NextResponse.json({ ok: false, code: "unauthenticated", error: "ההתחברות פגה. התחברו שוב." }, { status: 401 });
+  }
+  if (rateLimited(`plate:${user.id}`, 20, 60_000)) {
+    return NextResponse.json(
+      { ok: false, code: "rate_limited", error: "יותר מדי חיפושים בזמן קצר. נסו שוב בעוד דקה." },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
   }
   const { plate: raw } = await params;
   const plate = plateField.safeParse(raw);

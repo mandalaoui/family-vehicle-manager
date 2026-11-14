@@ -4,7 +4,8 @@ import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Layout";
 import { ROLE_LABELS } from "@/lib/format";
-import { getCurrentUser } from "@/lib/server/context";
+import Link from "next/link";
+import { getFamilyContext } from "@/lib/server/context";
 import { tokenSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 
@@ -59,7 +60,8 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     );
   }
 
-  const user = await getCurrentUser();
+  const ctx = await getFamilyContext();
+  const user = ctx?.user ?? null;
   const next = `/invite/${parsed.data}`;
 
   return (
@@ -78,6 +80,15 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         <div className="flex flex-col gap-3">
           <Notice icon={Info}>התחברו עם חשבון ה־Google שאליו נשלחה ההזמנה כדי להצטרף.</Notice>
           <GoogleSignInButton next={next} />
+        </div>
+      ) : ctx?.membership ? (
+        <div className="flex flex-col gap-3">
+          <Notice tone="warn" icon={Info} role="alert">
+            החשבון הזה כבר חבר במשפחה. כדי להצטרף למשפחה אחרת, עזבו קודם את המשפחה הנוכחית בהגדרות.
+          </Notice>
+          <Link href="/settings" className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-silver-300 bg-white px-4 font-semibold">
+            להגדרות המשפחה
+          </Link>
         </div>
       ) : preview.email_matches === false ? (
         <div className="flex flex-col gap-3">

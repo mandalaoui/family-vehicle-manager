@@ -187,4 +187,14 @@ select chk('p15: storage select member', public.cnt_as('bbbbbbbb-0000-0000-0000-
 select chk('p15: storage select non-member', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from storage.objects'), '0');
 select chk('p15: storage insert by non-member blocked', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into storage.objects(bucket_id,name) select 'vehicle-photos', p from photo_path $q$), 'new row violates row-level security policy for table "objects"');
 
+-- phase 2: a user who already belongs to a family cannot accept another invitation
+select chk('p2: C creates own family', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.create_family('Levi') $q$), 'ok');
+create temp table inv_tok2(t text);
+grant all on inv_tok2 to authenticated;
+select chk('p2: A creates own family', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ select public.create_family('Mizrahi') $q$), 'ok');
+select chk('p2: A invites C', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ insert into inv_tok2 select public.create_invitation((select id from public.families where name='Mizrahi'),'c@x.com','member') $q$), 'ok');
+select chk('p2: existing member cannot accept', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok2))), 'already_in_family');
+select chk('p2: C adds vehicle', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.vehicles(family_id,plate,make,model) select id,'5551234','Kia','Niro' from public.families where name='Levi' $q$), 'ok');
+select chk('p2: complete_service still works', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.complete_service((select id from public.vehicles where plate='5551234'), current_date, 1000, null, null, null) $q$), 'ok');
+
 select n, case when got is not distinct from want then 'PASS' else 'FAIL' end as r, name, got, want from public.zz_results order by n;
