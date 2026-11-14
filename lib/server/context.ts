@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Role } from "@/types/database";
+import { pickMembership } from "@/lib/membership";
 import { createClient } from "@/utils/supabase/server";
 
 export interface Membership {
@@ -29,13 +30,8 @@ export const getFamilyContext = cache(async (): Promise<FamilyContext | null> =>
   if (!user) return null;
   const supabase = await createClient();
 
-  const { data: member } = await supabase
-    .from("family_members")
-    .select("family_id, role")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const { data: rows } = await supabase.from("family_members").select("family_id, role, created_at").eq("user_id", user.id);
+  const member = pickMembership(rows ?? []);
   if (!member) return { user, membership: null };
 
   const { data: family } = await supabase.from("families").select("id, name").eq("id", member.family_id).maybeSingle();

@@ -25,7 +25,7 @@ export default async function DashboardPage() {
   const membership = ctx!.membership!; // guaranteed by the (app) layout
   const isAdmin = membership.role === "admin";
   const supabase = await createClient();
-  const { data: vehicles } = await supabase.from("vehicles").select("*").order("created_at", { ascending: true });
+  const { data: vehicles } = await supabase.from("vehicles").select("*").eq("family_id", membership.familyId).order("created_at", { ascending: true });
   const list = vehicles ?? [];
   const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();

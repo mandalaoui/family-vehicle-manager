@@ -13,7 +13,7 @@ export default async function VehiclesPage() {
   const ctx = await getFamilyContext();
   const isAdmin = ctx!.membership!.role === "admin";
   const supabase = await createClient();
-  const { data } = await supabase.from("vehicles").select("*").order("created_at", { ascending: true });
+  const { data } = await supabase.from("vehicles").select("*").eq("family_id", ctx!.membership!.familyId).order("created_at", { ascending: true });
   const list = data ?? [];
   const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();

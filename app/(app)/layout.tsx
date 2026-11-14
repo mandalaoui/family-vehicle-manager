@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/AppHeader";
 import { getFamilyContext } from "@/lib/server/context";
 
+// Everything under (app) is per user and per request: never prerender or cache it.
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getFamilyContext();
   if (!ctx) redirect("/login");
