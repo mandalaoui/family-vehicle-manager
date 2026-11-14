@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ClipboardList, Pencil, Trash2, Wrench } from "lucide-react";
@@ -10,7 +11,8 @@ import { useToast } from "@/components/ui/Toast";
 import { deleteServiceLog, restoreServiceLog } from "@/lib/actions/service";
 import { formatDate, formatNumber, KM, SHEKEL } from "@/lib/format";
 import type { ServiceLog } from "@/types/database";
-import { ServiceModal } from "./ServiceModal";
+// Downloaded only when a log is edited.
+const ServiceModal = dynamic(() => import("./ServiceModal").then((m) => m.ServiceModal));
 
 export function ServiceHistory({
   vehicleId,

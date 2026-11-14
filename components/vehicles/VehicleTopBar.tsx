@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Gauge, Pencil, RefreshCw, Trash2, TriangleAlert, Undo2, Wrench } from "lucide-react";
@@ -12,8 +13,9 @@ import { deleteVehicle, renewDue, undoRenewDue } from "@/lib/actions/vehicles";
 import { daysBetween, formatDate } from "@/lib/format";
 import type { RenewalUndoEntry } from "@/types/database";
 
-import { MileageModal } from "./MileageModal";
-import { ServiceModal } from "./ServiceModal";
+// Modals are downloaded only when opened.
+const MileageModal = dynamic(() => import("./MileageModal").then((m) => m.MileageModal));
+const ServiceModal = dynamic(() => import("./ServiceModal").then((m) => m.ServiceModal));
 
 const RENEW_WINDOW_DAYS = 60;
 
