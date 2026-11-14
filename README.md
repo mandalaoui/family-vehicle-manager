@@ -1,7 +1,150 @@
-# family-vehicle-manager
+# ניהול רכבי המשפחה (family-vehicle-manager)
 
-אב-טיפוס לחיץ של "ניהול רכבי המשפחה": אפליקציית ווב פרטית למשפחות בישראל לעקוב אחרי רישוי, טיפולים, קילומטראז', אחריות ומוסכים.
+אפליקציית ווב פרטית למשפחות בישראל לעקוב אחרי רכבים: תוקף רישוי, טסט וביטוח, טיפולים לפי קילומטראז׳, והיסטוריית טיפולים. כל המשפחה רואה אותם נתונים; מנהלים מנהלים את החברים והרכבים.
 
-- קובץ יחיד: `index.html` (React 18 + Tailwind + אייקוני lucide, נטענים מ-CDN ומקומפלים בדפדפן).
-- נתוני הדגמה בלבד, ללא backend וללא קריאות API חיצוניות. כל המצב נשמר בזיכרון (`useState`).
-- לפתיחה: פותחים את `index.html` בדפדפן.
+> **שלב 1 לא כולל:** שליפת פרטי רכב לפי מספר (מאגר משרד התחבורה), מוסכים מועדפים, אחריות, תמונות רכב, תזכורות באימייל ומשימות cron. ההזמנות לא נשלחות באימייל: המנהל מעתיק את הקישור ושולח אותו בעצמו.
+
+## טכנולוגיות
+
+- Next.js 16 (App Router, `proxy.ts`) + TypeScript + Tailwind CSS 4
+- Supabase: Auth (Google), Postgres עם Row Level Security (`@supabase/supabase-js`, `@supabase/ssr`)
+- `zod` לאימות בצד השרת, `lucide-react` לאייקונים, Heebo דרך `next/font`
+- בדיקות: Vitest (לוגיקה טהורה) + בדיקות SQL ל־RLS (`supabase/tests`)
+
+## מבנה התיקיות
+
+```
+app/
+  (app)/            מסכים מוגנים: לוח רכבים, /vehicles, /vehicles/[id], /settings
+  login/ onboarding/ invite/[token]/   מסכים ציבוריים / פתיחת משפחה / קבלת הזמנה
+  auth/callback  auth/signout          נתיבי Supabase Auth
+components/         ui/ (Button, Field, Modal, Menu, Toast, Status...), vehicles/, settings/
+lib/                alerts.ts (חישוב התראות), format.ts, validation.ts (zod), errors.ts,
+                    actions/ (Server Actions), server/ (הקשר משתמש/משפחה)
+utils/supabase/     server.ts, client.ts, middleware.ts (רענון סשן)
+proxy.ts            שומר הסשן (ב־Next 16 במקום middleware.ts)
+supabase/migrations סכמה, RLS, פונקציות
+supabase/tests      בדיקות SQL מקומיות
+prototype/          אב־הטיפוס הלחיץ (מקור העיצוב)
+```
+
+## הקמה צעד אחר צעד
+
+### 1. מיגרציות ב־Supabase
+
+ב־Supabase Dashboard של הפרויקט (`rtaixfnwuievkvyosrsp`) פתחו **SQL Editor** והריצו לפי הסדר:
+
+1. `supabase/migrations/20261114120000_phase1_schema.sql`
+2. `supabase/migrations/20261114130000_complete_service.sql`
+
+### 2. Google Cloud (OAuth)
+
+1. ב־Google Cloud Console: **APIs & Services → OAuth consent screen**. הגדירו שם אפליקציה ואימייל תמיכה (אפשר להשאיר במצב Testing ולהוסיף את המשתמשים כ־Test users).
+2. **Credentials → Create credentials → OAuth client ID → Web application**.
+3. ב־**Authorized redirect URIs** הוסיפו בדיוק: `https://rtaixfnwuievkvyosrsp.supabase.co/auth/v1/callback`
+4. שמרו את ה־Client ID וה־Client secret (לא לשתף בצ׳אט ולא לשמור בגיט).
+
+### 3. Supabase Auth
+
+1. **Authentication → Providers → Google**: הפעילו והזינו Client ID ו־Client secret.
+2. **Authentication → URL Configuration**:
+   - Site URL: `http://localhost:3000` (בפיתוח; בפרודקשן כתובת Vercel).
+   - Redirect URLs: `http://localhost:3000/**` וגם `https://<הדומיין-שלכם>.vercel.app/**`.
+
+### 4. משתני סביבה
+
+```bash
+cp .env.example .env.local
+```
+
+מלאו ב־`.env.local` (Project Settings → API) את `NEXT_PUBLIC_SUPABASE_URL` ו־`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. אסור להשתמש במפתח `service_role` באפליקציה הזאת, והקובץ לא נכנס לגיט.
+
+### 5. הרצה
+
+```bash
+npm install
+npm run dev
+```
+
+פתחו http://localhost:3000.
+
+## סקריפטים
+
+| פקודה | מה היא עושה |
+|---|---|
+| `npm run dev` | שרת פיתוח |
+| `npm run build` / `npm start` | בנייה והרצה של גרסת פרודקשן |
+| `npm run lint` | ESLint |
+| `npm run typecheck` | בדיקת טיפוסים |
+| `npm test` | בדיקות Vitest (התראות, תאריכים, ניקוי `next=`) |
+| `npm run check` | כל האמור לעיל ברצף |
+
+### בדיקות SQL מקומיות (RLS)
+
+על Postgres רגיל (לא על Supabase!), בבסיס נתונים ריק:
+
+```bash
+psql -d scratch -v ON_ERROR_STOP=1 \
+  -f supabase/tests/stubs.sql \
+  -f supabase/migrations/20261114120000_phase1_schema.sql \
+  -f supabase/migrations/20261114130000_complete_service.sql \
+  -f supabase/tests/rls_tests.sql
+```
+
+כל שורה בפלט צריכה להיות `PASS`. הקובץ `stubs.sql` מדמה את `auth.uid()` ו־`auth.jwt()` ומיועד לשימוש מקומי בלבד.
+
+## פריסה ל־Vercel
+
+1. ב־Vercel: **Add New → Project** וייבאו את הריפו.
+2. הגדירו Environment Variables: `NEXT_PUBLIC_SUPABASE_URL` ו־`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+3. Deploy.
+4. הוסיפו את הדומיין של Vercel ב־Supabase: Authentication → URL Configuration (Site URL ו־Redirect URLs עם `/**`).
+
+## החלטות מוצר עיקריות
+
+- הזמנה קשורה לכתובת אימייל: הקישור עובד רק עם חשבון Google באותה כתובת, בתוקף 7 ימים, הזמנה אחת פעילה לכל כתובת.
+- מנהל בלבד: הוספה ומחיקה של רכב, יצירה וביטול של הזמנות, שינוי תפקידים, הסרת חברים ושינוי שם המשפחה. כל חבר: צפייה, עריכת רכב, עדכון קילומטראז׳, ״בוצע טיפול״, ניהול היסטוריית טיפולים ועזיבת המשפחה. ההרשאות נאכפות ב־RLS, והממשק רק מסתיר את אותן פעולות.
+- אי אפשר להסיר או להוריד בדרגה את המנהל האחרון (טריגר במסד הנתונים).
+- רמות התראה (תווית + אייקון, לא רק צבע): באיחור, דחוף (עד 7 ימים / 300 ק״מ), בקרוב (עד 30 ימים / 1,000 ק״מ), תקין. קילומטראז׳ שלא עודכן 60 יום מציג אזהרה. החישוב בשרת לפי התאריך ב־Asia/Jerusalem.
+- ״בוצע טיפול״ הוא פעולה אטומית אחת במסד הנתונים (`complete_service`): רישום הטיפול, העלאת הקילומטראז׳ רק אם גבוה יותר, והטיפול הבא לפי מרווח הטיפול.
+- ביטול ״סימון כחודש״ (טסט/רישוי) נשמר בדפדפן ל־30 יום, כי הסכמה לא כוללת עמודה לתאריך הקודם. הביטול מתבצע רק אם התאריך עדיין זה שנוצר בחידוש.
+
+## רשימת בדיקות ידנית
+
+דורש שני חשבונות Google שונים (A ו־B) ושלושה אם רוצים לבדוק גם הזמנה לכתובת אחרת (C).
+
+**התחברות והצטרפות**
+- [ ] משתמש חדש מתחבר עם Google ומגיע ל־`/onboarding`; אחרי יצירת משפחה הוא מגיע ללוח הרכבים ולא חוזר ל־onboarding.
+- [ ] משתמש לא מחובר שנכנס ל־`/vehicles` מועבר ל־`/login?next=...` וחוזר לשם אחרי ההתחברות.
+- [ ] `/auth/callback?next=//evil.com` ו־`?next=https://evil.com` מובילים ל־`/` ולא לאתר חיצוני.
+
+**בידוד נתונים (RLS) בין משפחות**
+- [ ] A יוצר משפחה ורכב. B (משפחה אחרת או בלי משפחה) לא רואה את הרכב ברשימה, וכניסה ישירה ל־`/vehicles/<id>` של A מציגה ״לא נמצא״.
+- [ ] B לא רואה את חברי המשפחה של A ב־`/settings`.
+
+**הרשאות**
+- [ ] A מזמין את B כ״חבר משפחה״ ו־B מצטרף. B לא רואה כפתור ״הוספת רכב״; ב־`/vehicles/new` מוצגת הודעת ״למנהלים בלבד״.
+- [ ] B לא רואה ״מחיקת הרכב״ בתפריט ⋯, ו־B כן יכול לערוך רכב, לעדכן קילומטראז׳ ולסמן ״בוצע טיפול״.
+- [ ] ב־`/settings` B רואה את רשימת החברים במצב צפייה בלבד: בלי טופס הזמנה, בלי רשימת הזמנות, בלי תפריטי ⋯ על חברים אחרים, בלי שינוי שם משפחה.
+- [ ] A הופך את B למנהל ובחזרה; A מסיר את B.
+
+**המנהל האחרון**
+- [ ] כש־A הוא המנהל היחיד: ״הפיכה לחבר רגיל״ ו״עזיבת המשפחה״ מציגים את ההודעה ״לא ניתן להסיר או להוריד בדרגה את המנהל האחרון...״.
+- [ ] אחרי שמינו מנהל נוסף, A יכול להוריד את עצמו בדרגה.
+
+**הזמנות**
+- [ ] הזמנה לכתובת של C, שנפתחת על ידי B (כתובת אחרת): מוצגת ההודעה ״ההזמנה נשלחה לכתובת Google אחרת...״ ואין הצטרפות.
+- [ ] הזמנה שבוטלה: הקישור מציג ״ההזמנה בוטלה על ידי מנהל המשפחה״.
+- [ ] הזמנה שפג תוקפה (אפשר לדמות ב־SQL Editor: `update invitations set expires_at = now() - interval '1 minute' where ...`): מוצגת ״תוקף ההזמנה פג...״, ואפשר ליצור חדשה לאותה כתובת.
+- [ ] הזמנה שנוצלה: שימוש שני מציג ״ההזמנה כבר נוצלה״.
+- [ ] יצירת הזמנה שנייה לאותה כתובת בזמן שיש פעילה: ״כבר קיימת הזמנה פעילה...״; הזמנה לכתובת של חבר קיים: ״כתובת האימייל הזאת כבר חברה במשפחה״.
+- [ ] כפתור ״העתקת קישור״ מעתיק, ומוצג toast.
+
+**רכבים וטיפולים**
+- [ ] הוספת רכב עם מספר קיים באותה משפחה: ״רכב עם המספר הזה כבר קיים במשפחה״.
+- [ ] תאריכים בפורמט dd/mm/yyyy עם מסכה; תאריך לא אמיתי (31/02/2026) נדחה בהודעה ברורה.
+- [ ] תאריך טסט בעוד 5 ימים: ״דחוף״; בעוד 20 יום: ״בקרוב״; אתמול: ״באיחור״, והפריט מופיע בראש ״דורש טיפול״ בלוח.
+- [ ] ״בוצע טיפול״ מעלה את הקילומטראז׳ (רק אם גבוה יותר) ומעדכן את ״הטיפול הבא״; עריכה ומחיקה של טיפול מחשבות מחדש את הטיפול הבא; מחיקה מציעה ״ביטול״ ב־toast ל־9 שניות.
+- [ ] ״סימון הרישוי כחודש״ מציע ״ביטול״ ב־toast, ונשאר זמין בתפריט ⋯.
+- [ ] קילומטראז׳ שלא עודכן 60+ יום מציג אזהרה ״עדכנו קילומטראז'״ (אפשר לדמות ב־SQL: `update vehicles set mileage_updated_at = current_date - 90`).
+- [ ] במסך צר (375px): תפריט המבורגר, בלי גלילה אופקית, חלונות נפתחים כ־bottom sheet; Escape סוגר חלונות ותפריטים.
