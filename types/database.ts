@@ -158,6 +158,7 @@ export type Database = {
         Args: { p_token: string };
         Returns: { family_name: string; role: Role; status: InvitationStatus; email_matches: boolean | null }[];
       };
+      recompute_next_service: { Args: { p_vehicle_id: string }; Returns: undefined };
       complete_service: {
         Args: {
           p_vehicle_id: string;
@@ -174,3 +175,7 @@ export type Database = {
     CompositeTypes: { [_ in never]: never };
   };
 };
+
+export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
+export type ServiceLog = Database["public"]["Tables"]["service_logs"]["Row"];
+export type Invitation = Database["public"]["Tables"]["invitations"]["Row"];
