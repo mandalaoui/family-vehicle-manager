@@ -18,7 +18,7 @@ export interface MinistryVehicle {
   make: string;
   model: string;
   year: number | null;
-  /** One of our color names (see COLORS), "אחר" when unknown, null when missing. */
+  /** The ministry's color text as returned (e.g. "אפור כהה מטלי"), null when missing. Only the tint is normalized (lib/vehicle-color.ts). */
   color: string | null;
   fuel_type: FuelType | null;
   /** tokef_dt: the next annual test / license renewal date. */
@@ -47,26 +47,10 @@ export function cleanMake(raw: string | null | undefined): string {
   return words.join(" ");
 }
 
-const COLOR_RULES: [RegExp, string][] = [
-  [/לבן|שנהב/, "לבן"],
-  [/שחור/, "שחור"],
-  [/כסוף|כסף/, "כסוף"],
-  [/אפור|פחם|גרפיט|טיטניום/, "אפור"],
-  [/כחול|תכלת|נייבי/, "כחול"],
-  [/אדום|בורדו|ורוד/, "אדום"],
-  [/ירוק|זית/, "ירוק"],
-  [/צהוב|חרדל/, "צהוב"],
-  [/חום|קפה|שוקולד|ברונזה|בז/, "חום"],
-  [/כתום|נחושת/, "כתום"],
-  [/זהב|שמפניה/, "זהב"],
-  [/סגול/, "סגול"],
-];
-
-export function mapColor(raw: string | null | undefined): string | null {
-  const v = (raw ?? "").trim();
-  if (!v) return null;
-  for (const [re, name] of COLOR_RULES) if (re.test(v)) return name;
-  return "אחר";
+/** The ministry's color text, kept exactly as returned (spaces collapsed, max 30 chars like the DB column). */
+export function cleanColor(raw: string | null | undefined): string | null {
+  const v = (raw ?? "").replace(/\s+/g, " ").trim().slice(0, 30);
+  return v || null;
 }
 
 export function mapFuel(raw: string | null | undefined): FuelType | null {
@@ -89,7 +73,7 @@ export function mapMinistryRecord(r: MinistryRecord): MinistryVehicle {
     make: cleanMake(r.tozeret_nm),
     model: (r.kinuy_mishari ?? "").trim() || (r.degem_nm ?? "").trim(),
     year: Number.isInteger(year) && year >= 1950 && year <= 2100 ? year : null,
-    color: mapColor(r.tzeva_rechev),
+    color: cleanColor(r.tzeva_rechev),
     fuel_type: mapFuel(r.sug_delek_nm),
     valid_until: isoDate(r.tokef_dt),
     last_test: isoDate(r.mivchan_acharon_dt),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanMake, mapColor, mapFuel, mapMinistryRecord } from "./ministry-map";
+import { cleanColor, cleanMake, mapFuel, mapMinistryRecord } from "./ministry-map";
 
 // A real record from the data.gov.il vehicle dataset (field names verified against the live API).
 const sample = {
@@ -19,7 +19,7 @@ describe("mapMinistryRecord", () => {
       make: "פורשה",
       model: "718 BOXSTER",
       year: 2018,
-      color: "אפור",
+      color: "אפור מטל",
       fuel_type: "petrol",
       valid_until: "2027-07-15",
       last_test: "2026-11-11",
@@ -56,8 +56,10 @@ describe("helpers", () => {
     expect(cleanMake("ב מ וו")).toBe("ב מ וו");
   });
   it("maps colors and fuels", () => {
-    expect(mapColor("לבן פנינה")).toBe("לבן");
-    expect(mapColor("ססגוני")).toBe("אחר");
+    expect(cleanColor("  אפור כהה   מטאלי ")).toBe("אפור כהה מטאלי");
+    expect(cleanColor("")).toBeNull();
+    expect(cleanColor(null)).toBeNull();
+    expect(cleanColor("x".repeat(40))).toHaveLength(30);
     expect(mapFuel("דיזל")).toBe("diesel");
     expect(mapFuel("חשמל")).toBe("electric");
     expect(mapFuel("היברידי בנזין / חשמל")).toBe("hybrid");
