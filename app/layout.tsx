@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Heebo } from "next/font/google";
-import { ToastProvider } from "@/components/ui/Toast";
+import { SiteShell } from "@/components/SiteShell";
 import "./globals.css";
 
 const heebo = Heebo({
@@ -23,8 +23,8 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="he" dir="rtl" className={heebo.variable}>
-      <body className="min-h-screen font-sans text-ink antialiased">
-        <ToastProvider>{children}</ToastProvider>
+      <body className="flex min-h-screen flex-col font-sans text-ink antialiased">
+        <SiteShell>{children}</SiteShell>
       </body>
     </html>
   );

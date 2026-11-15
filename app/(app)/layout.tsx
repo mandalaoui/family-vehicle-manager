@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!ctx.membership) redirect("/onboarding");
 
   return (
-    <div className="min-h-screen">
+    <div className="flex-1">
       <AppHeader familyName={ctx.membership.familyName} />
       <main className="mx-auto max-w-5xl px-4 pb-10 pt-5">{children}</main>
     </div>

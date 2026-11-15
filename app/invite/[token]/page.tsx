@@ -20,7 +20,7 @@ const STATUS_MESSAGES = {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
+    <main className="mx-auto flex flex-1 max-w-md flex-col justify-center px-4 py-10">
       <div className="rounded-2xl border border-silver-300 bg-white p-6 shadow-sm sm:p-8">{children}</div>
     </main>
   );
