@@ -8,6 +8,8 @@ const PUBLIC_PATHS = ["/login", "/auth/callback"];
 function isPublic(pathname: string) {
   return (
     PUBLIC_PATHS.includes(pathname) ||
+    // Cron has no session cookie; the route itself requires REMINDERS_ENABLED and a bearer secret.
+    pathname === "/api/cron/reminders" ||
     pathname === "/invite" ||
     pathname.startsWith("/invite/")
   );

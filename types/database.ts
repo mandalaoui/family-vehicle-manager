@@ -2,7 +2,7 @@
 export type Role = "admin" | "member";
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 export type RenewalUndoEntry = { previous: string | null; next: string; at: string };
-export type RenewalUndoMap = Partial<Record<"test_due" | "license_due", RenewalUndoEntry>>;
+export type RenewalUndoMap = Partial<Record<"license_due", RenewalUndoEntry>>;
 export interface DeletedServiceLog {
   vehicle_id: string;
   service_date: string;
@@ -94,6 +94,7 @@ export type Database = {
           fuel_type: FuelType | null;
           mileage: number;
           mileage_updated_at: string;
+          /** @deprecated Merged into license_due (migration 4). Still in the table, never written by the app. */
           test_due: string | null;
           license_due: string | null;
           insurance_due: string | null;
@@ -117,7 +118,6 @@ export type Database = {
           fuel_type?: FuelType | null;
           mileage?: number;
           mileage_updated_at?: string;
-          test_due?: string | null;
           license_due?: string | null;
           insurance_due?: string | null;
           next_service_km?: number | null;
@@ -135,7 +135,6 @@ export type Database = {
           fuel_type?: FuelType | null;
           mileage?: number;
           mileage_updated_at?: string;
-          test_due?: string | null;
           license_due?: string | null;
           insurance_due?: string | null;
           next_service_km?: number | null;

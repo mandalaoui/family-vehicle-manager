@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Layout";
 import { TriangleAlert } from "lucide-react";
@@ -18,6 +17,9 @@ function GoogleMark() {
 }
 
 // `next` must already be sanitized by the server (relative path only).
+// Warm the lazily loaded client when the user shows intent (hover/focus), so the click feels instant.
+const preload = () => void import("@/utils/supabase/client");
+
 export function GoogleSignInButton({ next }: { next: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +28,8 @@ export function GoogleSignInButton({ next }: { next: string }) {
     setPending(true);
     setError(null);
     try {
+      // Loaded on click: keeps the Supabase browser client out of the initial login/invite bundle.
+      const { createClient } = await import("@/utils/supabase/client");
       const supabase = createClient();
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
       const { error: err } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
@@ -38,7 +42,7 @@ export function GoogleSignInButton({ next }: { next: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <Button variant="neutral" loading={pending} onClick={signIn} className="w-full text-base">
+      <Button variant="neutral" loading={pending} onClick={signIn} onPointerEnter={preload} onFocus={preload} className="w-full text-base">
         {!pending ? <GoogleMark /> : null}
         התחברות עם Google
       </Button>

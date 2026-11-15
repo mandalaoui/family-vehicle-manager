@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateVehicle } from "@/lib/server/revalidate";
 import { dbErrorMessage, MINISTRY_NOT_FOUND, MINISTRY_UNAVAILABLE } from "@/lib/errors";
 import { fetchMinistryVehicle } from "@/lib/server/ministry";
 import { rateLimited } from "@/lib/server/rate-limit";
@@ -12,12 +12,6 @@ import { mileageSchema, uuidSchema, vehicleSchema, type VehicleInput } from "@/l
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
 const BAD_REQUEST = "הבקשה לא תקינה. רעננו את הדף ונסו שוב.";
 const NOT_FOUND = "הרכב לא נמצא. ייתכן שהוא נמחק.";
-
-function revalidateVehicle(id?: string) {
-  revalidatePath("/");
-  revalidatePath("/vehicles");
-  if (id) revalidatePath(`/vehicles/${id}`);
-}
 
 export async function createVehicle(input: VehicleInput): Promise<ActionResult<{ id: string; warning?: string }>> {
   const s = await requireSession();
@@ -66,7 +60,7 @@ export async function updateVehicle(id: string, input: VehicleInput): Promise<Ac
   const parsed = vehicleSchema.safeParse(input);
   if (!parsed.success) return zodFail(parsed.error);
 
-  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage, service_interval_km").eq("id", vid.data).maybeSingle();
+  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage, service_interval_km").eq("id", vid.data).eq("family_id", s.familyId).maybeSingle();
   if (readError) return fail(dbErrorMessage(readError, "update_vehicle_read"));
   if (!current) return fail(NOT_FOUND);
 
@@ -75,7 +69,7 @@ export async function updateVehicle(id: string, input: VehicleInput): Promise<Ac
     ...fields,
     ...(fields.mileage !== current.mileage ? { mileage_updated_at: todayInIsrael() } : {}),
   };
-  const { data, error } = await s.supabase.from("vehicles").update(patch).eq("id", vid.data).select("id");
+  const { data, error } = await s.supabase.from("vehicles").update(patch).eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) {
     const message = dbErrorMessage(error, "update_vehicle");
     return fail(message, error.code === "23505" ? { plate: message } : undefined);
@@ -114,13 +108,13 @@ export async function deleteVehicle(id: string): Promise<ActionResult> {
 
   // Remove the photo first: the storage policy needs the vehicle row to exist, so after the delete
   // the object could never be removed again through the API.
-  const { data: existing } = await s.supabase.from("vehicles").select("photo_path").eq("id", vid.data).maybeSingle();
+  const { data: existing } = await s.supabase.from("vehicles").select("photo_path").eq("id", vid.data).eq("family_id", s.familyId).maybeSingle();
   if (existing?.photo_path) {
     const removed = await s.supabase.storage.from(PHOTO_BUCKET).remove([photoPath(s.familyId, vid.data)]);
     if (removed.error) console.error("[delete_vehicle_photo]", removed.error.message);
   }
 
-  const { data, error } = await s.supabase.from("vehicles").delete().eq("id", vid.data).select("id");
+  const { data, error } = await s.supabase.from("vehicles").delete().eq("id", vid.data).eq("family_id", s.familyId).select("id");
   if (error) return fail(dbErrorMessage(error, "delete_vehicle"));
   if (!data?.length) return fail(FORBIDDEN);
   revalidateVehicle();
@@ -136,7 +130,7 @@ export async function updateMileage(id: string, mileage: string): Promise<Action
   const parsed = mileageSchema.safeParse({ mileage });
   if (!parsed.success) return zodFail(parsed.error);
 
-  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage").eq("id", vid.data).maybeSingle();
+  const { data: current, error: readError } = await s.supabase.from("vehicles").select("mileage").eq("id", vid.data).eq("family_id", s.familyId).maybeSingle();
   if (readError) return fail(dbErrorMessage(readError, "update_mileage_read"));
   if (!current) return fail(NOT_FOUND);
   if (parsed.data.mileage < current.mileage) {
@@ -148,6 +142,7 @@ export async function updateMileage(id: string, mileage: string): Promise<Action
     .from("vehicles")
     .update({ mileage: parsed.data.mileage, mileage_updated_at: todayInIsrael() })
     .eq("id", vid.data)
+    .eq("family_id", s.familyId)
     .select("id");
   if (error) return fail(dbErrorMessage(error, "update_mileage"));
   if (!data?.length) return fail(FORBIDDEN);
@@ -190,7 +185,7 @@ export async function refreshFromMinistry(id: string): Promise<ActionResult<{ va
 
   if (rateLimited(`refresh:${s.userId}`, 10, 60_000)) return fail("יותר מדי רענונות בזמן קצר. נסו שוב בעוד דקה.");
 
-  const { data: vehicle, error: readError } = await s.supabase.from("vehicles").select("plate").eq("id", vid.data).maybeSingle();
+  const { data: vehicle, error: readError } = await s.supabase.from("vehicles").select("plate").eq("id", vid.data).eq("family_id", s.familyId).maybeSingle();
   if (readError) return fail(dbErrorMessage(readError, "refresh_read"));
   if (!vehicle) return fail(NOT_FOUND);
 
@@ -204,6 +199,7 @@ export async function refreshFromMinistry(id: string): Promise<ActionResult<{ va
     .from("vehicles")
     .update({ license_due: validUntil })
     .eq("id", vid.data)
+    .eq("family_id", s.familyId)
     .select("id");
   if (error) return fail(dbErrorMessage(error, "refresh_update"));
   if (!data?.length) return fail(FORBIDDEN);

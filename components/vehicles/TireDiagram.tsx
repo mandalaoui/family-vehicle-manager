@@ -1,6 +1,6 @@
 "use client";
 
-import { LEVEL_LABEL, WHEEL_LABELS, type AlertLevel, type WheelKey } from "@/lib/alerts";
+import { WHEEL_LABELS, type AlertLevel, type WheelKey } from "@/lib/alerts";
 import { Status } from "@/components/ui/Status";
 import { Ltr } from "@/components/ui/Plate";
 import { formatDate } from "@/lib/format";
@@ -27,6 +27,9 @@ const CARD: Record<AlertLevel | "none", string> = {
   overdue: "border-red-300 bg-red-50",
   none: "border-dashed border-silver-300 bg-silver-50",
 };
+
+// The accessible name of each wheel button is its visible content (name, date, status), in that order,
+// so what a screen reader announces matches what is on screen (WCAG 2.5.3 Label in Name).
 
 // Positions of the wheels inside the car SVG (viewBox 0 0 100 210). Front of the car is at the TOP.
 // Right/left are the car's own sides when facing forward, so the car's right is the RIGHT of the screen.
@@ -77,20 +80,17 @@ function WheelButton({
   onSelect: (k: WheelKey) => void;
 }) {
   const label = WHEEL_LABELS[wheelKey];
-  const statusText = view.level ? LEVEL_LABEL[view.level] : "לא הוזן";
-  const aria = `${label}, ${view.date ? `הוחלף ב־${formatDate(view.date)}` : "אין תאריך"}, ${statusText}`;
   return (
     <button
       type="button"
       onClick={() => onSelect(wheelKey)}
-      aria-label={aria}
       aria-pressed={selected}
       className={`flex min-h-[88px] w-full min-w-0 flex-col items-center justify-center gap-1 self-center rounded-xl border-2 p-1.5 text-center ${CARD[view.level ?? "none"]} ${
         selected ? "ring-4 ring-brand ring-offset-1" : ""
       }`}
     >
       <span className="text-[13px] font-bold leading-tight">{label}</span>
-      <span className="text-xs text-muted">{view.date ? <Ltr>{formatDate(view.date)}</Ltr> : "—"}</span>
+      <span className="text-xs text-muted">{view.date ? <Ltr>{formatDate(view.date)}</Ltr> : <span aria-hidden>—</span>}</span>
       {view.level ? (
         <Status level={view.level} />
       ) : (
