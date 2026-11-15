@@ -14,7 +14,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (await getCurrentUser()) redirect(next);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
+    <main className="mx-auto flex flex-1 max-w-md flex-col justify-center px-4 py-10">
       <div className="rounded-2xl border border-silver-300 bg-white p-6 shadow-sm sm:p-8">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand text-white">
