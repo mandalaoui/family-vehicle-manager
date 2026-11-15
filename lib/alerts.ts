@@ -238,12 +238,14 @@ export function getVehicleAlerts(v: AlertVehicle, today: string): VehicleAlert[]
 
   const tires = tiresEstimate(v, today);
   if (tires) {
-    const kmPart = tires.kmLeft != null && tires.dueKm != null ? (tires.kmLeft > 0 ? ` או עוד ${formatNumber(tires.kmLeft)} ${KM}` : ` (חריגה של ${formatNumber(-tires.kmLeft)} ${KM})`) : "";
+    // "Whichever comes first" only makes sense when there are two limits (date and km).
+    const hasKm = tires.kmLeft != null && tires.dueKm != null;
+    const kmPart = hasKm ? ` או ${tires.kmLeft! > 0 ? `עוד ${formatNumber(tires.kmLeft!)} ${KM}` : `חריגה של ${formatNumber(-tires.kmLeft!)} ${KM}`}, המוקדם מביניהם` : "";
     alerts.push({
       kind: "tires",
       title: "בדיקת צמיגים (הערכה)",
       level: tires.level,
-      detail: `הערכה: ${describeDays(tires.daysLeft)} · סביב ${formatDate(tires.dueDate)}${kmPart}, המוקדם מביניהם`,
+      detail: `הערכה: ${describeDays(tires.daysLeft)} · סביב ${formatDate(tires.dueDate)}${kmPart}`,
       sort: Math.min(tires.daysLeft, tires.kmLeft != null ? tires.kmLeft / 50 : Infinity),
       estimated: true,
     });
