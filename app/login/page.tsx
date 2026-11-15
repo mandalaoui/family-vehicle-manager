@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Car, TriangleAlert } from "lucide-react";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
@@ -33,6 +34,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <GoogleSignInButton next={next} />
         <p className="mt-4 text-center text-xs text-muted">ההתחברות נעשית רק דרך חשבון Google. אנחנו לא שומרים סיסמאות.</p>
       </div>
+      <footer className="mt-4 flex justify-center gap-4 text-xs text-muted">
+        <Link href="/privacy" className="underline">
+          פרטיות
+        </Link>
+        <Link href="/terms" className="underline">
+          תנאי שימוש
+        </Link>
+      </footer>
     </main>
   );
 }
