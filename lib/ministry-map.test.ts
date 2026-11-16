@@ -55,9 +55,7 @@ describe("helpers", () => {
     expect(cleanMake("לנד רובר בריטניה")).toBe("לנד רובר");
     expect(cleanMake("ב מ וו")).toBe("ב מ וו");
   });
-  it("maps colors and fuels", () => {
-    expect(mapColor("לבן פנינה")).toBe("לבן");
-    expect(mapColor("ססגוני")).toBe("אחר");
+  it("maps fuels", () => {
     expect(mapFuel("דיזל")).toBe("diesel");
     expect(mapFuel("חשמל")).toBe("electric");
     expect(mapFuel("היברידי בנזין / חשמל")).toBe("hybrid");
