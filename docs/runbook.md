@@ -1,6 +1,6 @@
 # Runbook: תפעול והקמה
 
-מסמך תפעול קצר. ההקמה הראשונית המלאה (Google OAuth, Supabase, Vercel) נמצאת ב־`README.md`.
+מסמך תפעול קצר. ההקמה הראשונית המלאה (Google OAuth, Supabase, Vercel) נמצאת ב־`docs/dev-guide.he.md`.
 
 ## אזורים (חשוב לביצועים)
 
@@ -21,7 +21,7 @@
 ## הקמת סביבה חדשה (למשל פרויקט Supabase חדש)
 
 1. ליצור פרויקט Supabase באזור הרצוי.
-2. להריץ ב־SQL Editor, לפי הסדר, את כל הקבצים ב־`supabase/migrations/` (כיום 6 קבצים, מ־`20261114120000` עד `20261118100000`).
+2. להריץ ב־SQL Editor, לפי הסדר, את כל הקבצים ב־`supabase/migrations/` (כיום 7 קבצים, מ־`20261114120000` עד `20261119100000`).
 3. ב־Authentication, להפעיל את Google ולהגדיר Site URL ו־Redirect URLs (`http://localhost:3000/**` ודומיין Vercel).
 4. ב־Google Cloud לעדכן את ה־Authorized redirect URI לכתובת `https://<project-ref>.supabase.co/auth/v1/callback`.
 5. לעדכן את שני משתני הסביבה ב־`.env.local` וב־Vercel, ולפרוס מחדש.

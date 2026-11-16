@@ -1,198 +1,139 @@
-# ניהול רכבי המשפחה (family-vehicle-manager)
+# Family Vehicle Manager
 
-אפליקציית ווב פרטית למשפחות בישראל לעקוב אחרי רכבים: תוקף רישוי, טסט וביטוח, טיפולים לפי קילומטראז׳, והיסטוריית טיפולים. כל המשפחה רואה אותם נתונים; מנהלים מנהלים את החברים והרכבים.
+A mobile-first, Hebrew (RTL) web app that keeps track of a household's vehicles: license/test and insurance renewals, service by mileage, battery, tires and favorite garages. Type a plate number and the vehicle details are filled in from Israel's open Ministry of Transport data.
 
-> **לא כלול:** מוסכים מועדפים, אחריות, תזכורות באימייל ומשימות cron. ההזמנות לא נשלחות באימייל: המנהל מעתיק את הקישור ושולח אותו בעצמו.
->
-> **שלב 1.5 (הענף `phase-1-5`):** שליפת פרטי רכב לפי מספר ממאגר משרד התחבורה (data.gov.il, בלי מפתח), תמונת רכב ב־Supabase Storage פרטי, איור ברירת מחדל לפי צבע, ועריכת/מחיקת טיפולים וביטול ״סימון כמחודש״ בטרנזקציה במסד הנתונים.
+**Live demo: <https://family-vehicle-manager.vercel.app>** (sign in with Google; every new account starts with its own empty vehicle list)
 
-## טכנולוגיות
+| Dashboard (desktop) | Dashboard (mobile) | Edit vehicle (mobile) |
+|---|---|---|
+| ![Dashboard on desktop](docs/screenshots/dashboard-desktop.png) | ![Dashboard on mobile](docs/screenshots/dashboard-mobile.png) | ![Edit vehicle on mobile](docs/screenshots/edit-vehicle-mobile.png) |
 
-- Next.js 16 (App Router, `proxy.ts`) + TypeScript + Tailwind CSS 4
-- Supabase: Auth (Google), Postgres עם Row Level Security (`@supabase/supabase-js`, `@supabase/ssr`)
-- `zod` לאימות בצד השרת, `lucide-react` לאייקונים, Heebo דרך `next/font`
-- בדיקות: Vitest (לוגיקה טהורה) + בדיקות SQL ל־RLS (`supabase/tests`)
+_Screenshots use seeded demo vehicles with made-up plates; no real user data. The UI is Hebrew and right-to-left._
 
-## מבנה התיקיות
+## The problem
 
-```
-app/
-  (app)/            מסכים מוגנים: לוח רכבים, /vehicles, /vehicles/[id], /settings
-  login/ onboarding/ invite/[token]/   מסכים ציבוריים / פתיחת משפחה / קבלת הזמנה
-  auth/callback  auth/signout          נתיבי Supabase Auth
-components/         ui/ (Button, Field, Modal, Menu, Toast, Status...), vehicles/, settings/
-lib/                alerts.ts (חישוב התראות), format.ts, validation.ts (zod), errors.ts,
-                    actions/ (Server Actions), server/ (הקשר משתמש/משפחה)
-utils/supabase/     server.ts, client.ts, middleware.ts (רענון סשן)
-proxy.ts            שומר הסשן (ב־Next 16 במקום middleware.ts)
-supabase/migrations סכמה, RLS, פונקציות
-supabase/tests      בדיקות SQL מקומיות
-prototype/          אב־הטיפוס הלחיץ (מקור העיצוב)
-```
+Cars in a household come with a pile of dates and numbers: the annual test and license renewal, insurance expiry, the next service at N km, when the battery and tires were last changed, which garage did what. They live in glove boxes, WhatsApp threads and memory, and they are easy to miss (an expired license means a fine).
 
-## הקמה צעד אחר צעד
+## The solution
 
-### 1. מיגרציות ב־Supabase
+One place for all of it, with **clear alert levels** (overdue / urgent / soon / ok, shown with a label and icon, never color alone) and a "what needs attention" list on the dashboard. Adding a vehicle takes seconds because the app **looks the plate up in data.gov.il** (the Ministry of Transport's open dataset) and pre-fills make, model, year, color, fuel type and license expiry. A vehicle list can stay private, or be shared with family members through an email-bound invite link.
 
-ב־Supabase Dashboard של הפרויקט (`rtaixfnwuievkvyosrsp`) פתחו **SQL Editor** והריצו לפי הסדר:
+## Features
 
-1. `supabase/migrations/20261114120000_phase1_schema.sql`
-2. `supabase/migrations/20261114130000_complete_service.sql`
-3. `supabase/migrations/20261115100000_phase1_5.sql` (עמודות `photo_path` ו־`renewal_undo`, פונקציות טיפולים וחידוש, bucket פרטי `vehicle-photos` ומדיניות Storage)
-4. `supabase/migrations/20261116100000_merge_test_license.sql` (טסט ורישוי הופכים לתאריך אחד ב־`license_due`; העמודה `test_due` נשארת ללא שימוש)
-5. `supabase/migrations/20261117100000_phase2_hardening.sql` (תאריכי ״היום״ לפי Asia/Jerusalem, וחסימת קבלת הזמנה למי שכבר חבר במשפחה)
-6. `supabase/migrations/20261118100000_phase2_features.sql` (מצבר, צמיגים, מוסכים ברמת המשפחה וקישור מוסך לטיפול, חסימת משפחה שנייה ב־DB, ו־`my_pending_invitations`)
+- **Plate lookup** from data.gov.il (no API key), with a one-day cache for successful answers, an 8 second timeout and a graceful manual fallback.
+- **License/test and insurance** tracking with urgency levels, one-tap "mark as renewed" and a 30-day undo.
+- **Service by mileage**: log a service, the next one is computed from the interval, mileage only moves forward. Estimates are labeled as estimates.
+- **Battery and tires** (single date or per wheel, with a 4-wheel diagram), reminders after N months / K km, whichever comes first.
+- **Garages**: shared list with call, Waze and Google Maps links, and a link from a service entry to a garage.
+- **Photos** stored in a private Supabase Storage bucket, resized in the browser and served through short-lived signed URLs; a generic illustration tinted by the car's color when there is no photo.
+- **Sharing**: invite family members by email-bound link (7 days, single use); admin/member roles; the last admin cannot be removed.
+- **Personal first**: a new user gets a personal list automatically, with no setup screen. Sharing is opt-in, and accepting an invite replaces an empty personal list (never one that has vehicles).
+- Hebrew RTL UI, 44px touch targets, keyboard and screen-reader friendly (axe checks in tests).
 
-### 2. Google Cloud (OAuth)
+## Tech stack
 
-1. ב־Google Cloud Console: **APIs & Services → OAuth consent screen**. הגדירו שם אפליקציה ואימייל תמיכה (אפשר להשאיר במצב Testing ולהוסיף את המשתמשים כ־Test users).
-2. **Credentials → Create credentials → OAuth client ID → Web application**.
-3. ב־**Authorized redirect URIs** הוסיפו בדיוק: `https://rtaixfnwuievkvyosrsp.supabase.co/auth/v1/callback`
-4. שמרו את ה־Client ID וה־Client secret (לא לשתף בצ׳אט ולא לשמור בגיט).
-
-### 3. Supabase Auth
-
-1. **Authentication → Providers → Google**: הפעילו והזינו Client ID ו־Client secret.
-2. **Authentication → URL Configuration**:
-   - Site URL: `http://localhost:3000` (בפיתוח; בפרודקשן כתובת Vercel).
-   - Redirect URLs: `http://localhost:3000/**` וגם `https://<הדומיין-שלכם>.vercel.app/**`.
-
-### 4. משתני סביבה
-
-```bash
-cp .env.example .env.local
-```
-
-מלאו ב־`.env.local` (Project Settings → API) את `NEXT_PUBLIC_SUPABASE_URL` ו־`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. אסור להשתמש במפתח `service_role` באפליקציה הזאת, והקובץ לא נכנס לגיט.
-
-### 5. הרצה
-
-```bash
-npm install
-npm run dev
-```
-
-פתחו http://localhost:3000.
-
-## סקריפטים
-
-| פקודה | מה היא עושה |
+| Area | Choice |
 |---|---|
-| `npm run dev` | שרת פיתוח |
-| `npm run build` / `npm start` | בנייה והרצה של גרסת פרודקשן |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | בדיקת טיפוסים |
-| `npm test` | בדיקות Vitest: התראות, תאריכים, סכמות zod, רכיבים (תרשים הצמיגים, טפסים, חלונות), נגישות (axe) ותשתית התזכורות |
-| `npm run test:sql` | בדיקות RLS ומיגרציות על Postgres מקומי בתוך התהליך (PGlite, בלי התקנה) |
-| `node scripts/route-js-size.mjs` | גודל ה־JS ללקוח לכל מסלול, אחרי `npm run build` |
-| `npm run check` | typecheck, ‏lint, ‏Vitest, בדיקות ה־SQL ו־build ברצף. אותו הדבר רץ ב־CI |
+| Framework | Next.js 16 (App Router, Server Components, Server Actions, `proxy.ts`), React 19, TypeScript |
+| Styling | Tailwind CSS v4, Heebo font, lucide icons |
+| Backend | Supabase: Postgres with Row Level Security, Google OAuth, private Storage |
+| Validation | zod (server side) |
+| Hosting | Vercel, functions pinned to `fra1`; Supabase in `eu-central-1` (Frankfurt) |
+| Tests | Vitest + Testing Library (+ axe), SQL tests on PGlite (in-process Postgres) |
+| CI | GitHub Actions: typecheck, lint, unit tests, SQL tests, production build |
 
-### בדיקות SQL מקומיות (RLS)
+## Architecture
 
-על Postgres רגיל (לא על Supabase!), בבסיס נתונים ריק:
-
-```bash
-psql -d scratch -v ON_ERROR_STOP=1 \
-  -f supabase/tests/stubs.sql \
-  -f supabase/migrations/20261114120000_phase1_schema.sql \
-  -f supabase/migrations/20261114130000_complete_service.sql \
-  -f supabase/tests/rls_tests.sql
+```mermaid
+flowchart LR
+  B[Browser<br/>React client components] -->|page request| P[Next.js proxy.ts<br/>session refresh + auth gate]
+  P --> S[Server Components<br/>and Server Actions]
+  B -.->|photo upload, signed URL| ST[(Supabase Storage<br/>private bucket)]
+  S -->|user JWT, anon key only| DB[(Supabase Postgres<br/>RLS on every table)]
+  S -->|SECURITY DEFINER RPCs<br/>create_family, accept_invitation,<br/>complete_service, ensure_personal_family| DB
+  S -->|plate lookup<br/>rate limited, 1-day cache| G[data.gov.il<br/>Ministry of Transport]
+  B -->|Google OAuth| A[Supabase Auth]
+  A --> DB
 ```
 
-כל שורה בפלט צריכה להיות `PASS`. הקובץ `stubs.sql` מדמה את `auth.uid()` ו־`auth.jwt()` ומיועד לשימוש מקומי בלבד.
+- The app only ever holds the **publishable key** plus the signed-in user's JWT. There is no `service_role` key anywhere, so **RLS is the real authorization layer**; the UI merely hides what the database would refuse.
+- Reads in pages verify the JWT locally (`getClaims`) to avoid an Auth round trip. The proxy and every write call `getUser()` so a revoked session is rejected immediately.
+- Operations that must be atomic or must cross RLS boundaries are **`SECURITY DEFINER` functions** with an empty `search_path`: creating a group, accepting an invitation, completing a service, renewing and undoing a renewal, editing service logs.
 
-## פריסה ל־Vercel
+## Engineering highlights
 
-1. ב־Vercel: **Add New → Project** וייבאו את הריפו.
-2. הגדירו Environment Variables: `NEXT_PUBLIC_SUPABASE_URL` ו־`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
-3. Deploy.
-4. הוסיפו את הדומיין של Vercel ב־Supabase: Authentication → URL Configuration (Site URL ו־Redirect URLs עם `/**`).
+- **Row Level Security with per-group isolation.** Every table is scoped by group membership through helper functions (`is_family_member`, `can_access_vehicle`, ...). Storage policies follow the same rule, so one group cannot read another group's photos by guessing a path.
+- **Concurrency-safe RPCs.** `ensure_personal_family` and `accept_invitation` take a per-user **advisory lock** and are backed by a unique index (one membership per user), so a double click or two tabs cannot create two groups. Accepting an invite deletes only an empty solo group, inside the same transaction.
+- **Invariants live in the database.** The last-admin rule is a trigger; one pending invite per email per group is a partial unique index; the service "next due" value is recomputed in SQL.
+- **Rate limiting** on the plate lookup (20 requests/min/user) and manual refresh (10/min/user): a best-effort in-memory sliding window, documented as such.
+- **Time zones.** "Today" is always the calendar date in `Asia/Jerusalem`, on the server and in SQL, so alerts do not flip at the wrong hour.
+- **Tests**: 154 Vitest tests (alert logic, date handling, zod schemas, forms, modals, tire diagram, accessibility) and 150+ SQL assertions that run the real migrations on PGlite, including cross-group access attempts. All of it runs in CI on every PR.
+- **Performance and region migration.** The database originally lived in Seoul, far from the Vercel functions and the Israeli users, so every page paid for several slow round trips (one Auth call plus 2-3 queries). Moving Supabase to Frankfurt (`eu-central-1`) and pinning the functions to `fra1` fixed most of it; verifying the JWT locally, fetching membership in a single query and running page queries in parallel trimmed the rest. Client JS per route is tracked with `scripts/route-js-size.mjs`.
+- **Security headers**, strict `next` redirect sanitizing (no open redirects) and server-side filtering of every vehicle/photo action by group, in addition to RLS.
 
-## שלב 2 (הענף `phase-2`)
+## Run it locally
 
-- הפונקציות ב־Vercel מוצמדות לאזור `fra1` (`vercel.json`), כדי להתקרב לשרתי data.gov.il. רק תשובות מוצלחות ממשרד התחבורה נשמרות במטמון (יום); ״לא נמצא״ ותקלות לא נשמרות.
-- headers של אבטחה (`next.config.ts`) והגבלת קצב לשליפת רכב (20 בקשות לדקה למשתמש, best-effort בזיכרון).
-- חשבון שכבר חבר במשפחה לא יכול לקבל הזמנה למשפחה אחרת (באפליקציה וב־DB).
-- מחיקת רכב מוחקת גם את התמונה שלו ב־Storage.
-- המפרט המקורי נמצא ב־`docs/spec.md`.
+Requirements: Node 22+, a Supabase project (free tier is fine) and a Google OAuth client.
 
-### שלב 2: פיצ׳רים (הענף `phase-2-features`)
+```bash
+git clone https://github.com/mandalaoui/family-vehicle-manager.git
+cd family-vehicle-manager
+npm install
+cp .env.example .env.local   # fill in the two Supabase values, see below
+npm run dev                  # http://localhost:3000
+```
 
-- **הרשמה פתוחה:** כל חשבון Google יכול להתחבר ולפתוח משפחה משלו (אחת למשתמש, גם ב־DB). מנהל מזמין אנשים למשפחה שלו בקישור. משתמש חדש שנכנס בלי הקישור רואה במסך הפתיחה את ההזמנות שממתינות לכתובת שלו.
-- **מצבר:** תאריך החלפה, תוקף אחריות (מידע בלבד) והערות. תזכורת בתווית ״הערכה״ אחרי N חודשים (ברירת מחדל 36).
-- **צמיגים:** תאריך החלפה אחד, או תאריך נפרד לכל גלגל. תזכורת בתווית ״הערכה״ אחרי N חודשים (48) או K ק״מ (50,000), המוקדם מביניהם. בלי ק״מ בהחלפה, לפי חודשים בלבד.
-- **מוסכים:** רשימה משפחתית (שם, טלפון, כתובת, הערות) עם קישורי חיוג, Waze ו־Google Maps (בלי API בתשלום). חברים מוסיפים ועורכים, מנהל מוחק. אפשר לקשר טיפול למוסך.
-- **ביצועים:** בדיקת ה־JWT בעמודים נעשית מקומית (`getClaims`), בלי קריאה לשרת ה־Auth. ה־proxy ופעולות כתיבה ממשיכים להשתמש ב־`getUser()`. חברות ומשפחה נשלפות בשאילתה אחת, ושאילתות העמודים רצות במקביל. עם `DEBUG_TIMING=1` בשרת, כל קריאה ל־Supabase נרשמת בלוג (שיטה, נתיב וזמן בלבד).
-- רשימת בדיקות בטלפון: `docs/phone-test-checklist.md`.
-- תפעול (אזורים, משתני סביבה, מדידת ביצועים, תקלות): `docs/runbook.md`. תזכורות באימייל (כבויות): `docs/reminders.md`. יומן שינויים: `CHANGELOG.md`.
+`.env.local` needs only:
 
-## החלטות מוצר עיקריות
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | your project URL (Project Settings, API) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | the publishable (anon) key. Never use the `service_role` key here |
 
-- הזמנה קשורה לכתובת אימייל: הקישור עובד רק עם חשבון Google באותה כתובת, בתוקף 7 ימים, הזמנה אחת פעילה לכל כתובת.
-- מנהל בלבד: הוספה ומחיקה של רכב, יצירה וביטול של הזמנות, שינוי תפקידים, הסרת חברים ושינוי שם המשפחה. כל חבר: צפייה, עריכת רכב, עדכון קילומטראז׳, ״בוצע טיפול״, ניהול היסטוריית טיפולים ועזיבת המשפחה. ההרשאות נאכפות ב־RLS, והממשק רק מסתיר את אותן פעולות.
-- אי אפשר להסיר או להוריד בדרגה את המנהל האחרון (טריגר במסד הנתונים).
-- רמות התראה (תווית + אייקון, לא רק צבע): באיחור, דחוף (עד 7 ימים / 300 ק״מ), בקרוב (עד 30 ימים / 1,000 ק״מ), תקין. קילומטראז׳ שלא עודכן 60 יום מציג אזהרה. החישוב בשרת לפי התאריך ב־Asia/Jerusalem.
-- ״בוצע טיפול״ הוא פעולה אטומית אחת במסד הנתונים (`complete_service`): רישום הטיפול, העלאת הקילומטראז׳ רק אם גבוה יותר, והטיפול הבא לפי מרווח הטיפול.
-- ביטול ״סימון כמחודש״ (טסט/רישוי) נשמר בעמודה `vehicles.renewal_undo` ל־30 יום, משותף לכל המשפחה. הביטול מתבצע רק אם התאריך עדיין זה שנוצר בחידוש.
-- שליפה ממשרד התחבורה: שדות `tozeret_nm` (יצרן, בלי שם המדינה), `kinuy_mishari`/`degem_nm` (דגם), `shnat_yitzur`, `tzeva_rechev`, `sug_delek_nm`. **`tokef_dt` הוא תוקף הרישוי השנתי, שמחייב מעבר טסט, ולכן הוא ממלא את השדה היחיד ״טסט ורישוי״ (`license_due`, ניתן לעריכה).** `mivchan_acharon_dt` מוצג כמידע בלבד (״טסט אחרון״). יש התראה אחת (״טסט וחידוש רישיון״) ופעולה אחת: ״סימון כמחודש״ (עם ביטול ל־30 יום). התשובות נשמרות במטמון ליום, עם timeout של 8 שניות. המאגר לא כולל סוג מרכב או תמונה.
-- תמונה: נשמרת ב־`vehicle-photos/{family_id}/{vehicle_id}.jpg`, מוקטנת בדפדפן (עד 1280px, JPEG 0.8) ומוצגת דרך signed URL. בלי תמונה מוצג איור רכב כללי בצבע הרכב ותג יצרן (בלי הורדת תמונות מאתרים אחרים).
+The reminder and debug variables in `.env.example` are optional and off by default.
 
-## רשימת בדיקות ידנית
+**Database.** In the Supabase SQL Editor, run the files in `supabase/migrations/` in this order:
 
-דורש שני חשבונות Google שונים (A ו־B) ושלושה אם רוצים לבדוק גם הזמנה לכתובת אחרת (C).
+1. `20261114120000_phase1_schema.sql`
+2. `20261114130000_complete_service.sql`
+3. `20261115100000_phase1_5.sql`
+4. `20261116100000_merge_test_license.sql`
+5. `20261117100000_phase2_hardening.sql`
+6. `20261118100000_phase2_features.sql`
+7. `20261119100000_personal_group.sql`
 
-**התחברות והצטרפות**
-- [ ] משתמש חדש מתחבר עם Google ומגיע ל־`/onboarding`; אחרי יצירת משפחה הוא מגיע ללוח הרכבים ולא חוזר ל־onboarding.
-- [ ] משתמש לא מחובר שנכנס ל־`/vehicles` מועבר ל־`/login?next=...` וחוזר לשם אחרי ההתחברות.
-- [ ] `/auth/callback?next=//evil.com` ו־`?next=https://evil.com` מובילים ל־`/` ולא לאתר חיצוני.
+Then enable the Google provider under Authentication and add `http://localhost:3000/**` to the redirect URLs. The step-by-step Google Cloud / Supabase / Vercel setup is in [docs/dev-guide.he.md](docs/dev-guide.he.md) (Hebrew).
 
-**בידוד נתונים (RLS) בין משפחות**
-- [ ] A יוצר משפחה ורכב. B (משפחה אחרת או בלי משפחה) לא רואה את הרכב ברשימה, וכניסה ישירה ל־`/vehicles/<id>` של A מציגה ״לא נמצא״.
-- [ ] B לא רואה את חברי המשפחה של A ב־`/settings`.
+## Testing
 
-**הרשאות**
-- [ ] A מזמין את B כ״חבר משפחה״ ו־B מצטרף. B לא רואה כפתור ״הוספת רכב״; ב־`/vehicles/new` מוצגת הודעת ״למנהלים בלבד״.
-- [ ] B לא רואה ״מחיקת הרכב״ בתפריט ⋯, ו־B כן יכול לערוך רכב, לעדכן קילומטראז׳ ולסמן ״בוצע טיפול״.
-- [ ] ב־`/settings` B רואה את רשימת החברים במצב צפייה בלבד: בלי טופס הזמנה, בלי רשימת הזמנות, בלי תפריטי ⋯ על חברים אחרים, בלי שינוי שם משפחה.
-- [ ] A הופך את B למנהל ובחזרה; A מסיר את B.
+```bash
+npm test            # Vitest: logic, components, accessibility
+npm run test:sql    # RLS + migrations on in-process Postgres (PGlite), no install needed
+npm run check       # typecheck + lint + tests + SQL tests + production build (same as CI)
+```
 
-**המנהל האחרון**
-- [ ] כש־A הוא המנהל היחיד: ״הפיכה לחבר רגיל״ ו״עזיבת המשפחה״ מציגים את ההודעה ״לא ניתן להסיר או להוריד בדרגה את המנהל האחרון...״.
-- [ ] אחרי שמינו מנהל נוסף, A יכול להוריד את עצמו בדרגה.
+## Docs
 
-**הזמנות**
-- [ ] הזמנה לכתובת של C, שנפתחת על ידי B (כתובת אחרת): מוצגת ההודעה ״ההזמנה נשלחה לכתובת Google אחרת...״ ואין הצטרפות.
-- [ ] הזמנה שבוטלה: הקישור מציג ״ההזמנה בוטלה על ידי מנהל המשפחה״.
-- [ ] הזמנה שפג תוקפה (אפשר לדמות ב־SQL Editor: `update invitations set expires_at = now() - interval '1 minute' where ...`): מוצגת ״תוקף ההזמנה פג...״, ואפשר ליצור חדשה לאותה כתובת.
-- [ ] הזמנה שנוצלה: שימוש שני מציג ״ההזמנה כבר נוצלה״.
-- [ ] יצירת הזמנה שנייה לאותה כתובת בזמן שיש פעילה: ״כבר קיימת הזמנה פעילה...״; הזמנה לכתובת של חבר קיים: ״כתובת האימייל הזאת כבר חברה במשפחה״.
-- [ ] כפתור ״העתקת קישור״ מעתיק, ומוצג toast.
+Internal and development notes (mostly Hebrew) live in [`docs/`](docs/):
 
-**שלב 1.5: משרד התחבורה ותמונות**
-- [ ] בהוספת רכב, הקלדת מספר של 7–8 ספרות ממלאת (אחרי רגע) יצרן, דגם, שנה, צבע, דלק ותוקף טסט ורישוי; כל שדה ניתן לעריכה לפני שמירה.
-- [ ] מספר שלא קיים: ״לא נמצא רכב עם מספר זה״ ואפשר להמשיך ידנית. ללא חיבור/בעת האטה: הודעה על שירות לא זמין והזנה ידנית.
-- [ ] ברכב עם תוקף טסט = תוקף רישוי מופיעה התראה אחת ״טסט וחידוש רישיון״; ״טסט אחרון״ מוצג כמידע בלבד בפרטי הרכב.
-- [ ] ״רענון ממשרד התחבורה״ בפרטי הרכב מעדכן את התאריכים.
-- [ ] בנייד, ״צילום״ פותח מצלמה ו״בחירה מהגלריה״ פותח גלריה; התמונה מועלית קטנה (כמה מאות KB) ומוצגת בכרטיס ובפרטי הרכב. ״הסרת תמונה״ מחזירה לאיור.
-- [ ] משתמש B ממשפחה אחרת: כתובת signed URL שפג תוקפה לא נפתחת, וניסיון להעלות לתיקיית משפחה אחרת נחסם (בדיקה ב־Supabase Storage).
-- [ ] עריכה/מחיקה של טיפול ו־״סימון כמחודש״ + ביטול עובדים גם ממכשיר אחר (הביטול נשמר ב־DB).
+- [dev-guide.he.md](docs/dev-guide.he.md): full setup, product decisions, manual test checklist
+- [runbook.md](docs/runbook.md): regions, environment variables, performance measurement, troubleshooting
+- [phone-test-checklist.md](docs/phone-test-checklist.md): manual checks on a real phone
+- [spec.md](docs/spec.md): the original task spec
+- [reminders.md](docs/reminders.md): the email-reminder groundwork (off)
+- [CHANGELOG.md](CHANGELOG.md): history by phase
 
-**תיקונים אחרי בדיקה ידנית (ענף `phase-1-5-fixes`)**
-- [ ] הוספת רכב: אחרי שליפה לפי מספר, בשדות יצרן ודגם אין הודעות שגיאה אדומות; הודעות שגיאה מופיעות רק אחרי לחיצה על שמירה, ונעלמות כשמתקנים את השדה.
-- [ ] שדה ״קילומטראז׳ נוכחי״ מופיע כשגיאה רק אחרי ניסיון שמירה בלי למלא אותו.
-- [ ] שם יצרן מהמאגר (למשל ״קיה ד.״) מוצג בלי קיצור ובלי שם מדינה.
-- [ ] יש שדה אחד ״תוקף טסט ורישוי״; בפרטי הרכב שורה אחת, והתראה אחת ״טסט וחידוש רישיון״. בתפריט ⋯: ״סימון כמחודש״ (בכתיב הזה), ואחריו ״ביטול סימון כמחודש״ שעובד גם אחרי רענון ומכשיר אחר.
-- [ ] רכב בלי טיפולים: ב״עבודות קרובות״ מוצגת הערכה עם תווית ״הערכה״ (הכפולה הבאה של מרווח הטיפול מעל הקילומטראז׳, או 12 חודשים מהוספת הרכב, המוקדם מביניהם). אחרי ״בוצע טיפול״ ההערכה מוחלפת בחישוב אמיתי.
-- [ ] בהוספת רכב עם ״טיפול אחרון״ (תאריך + ק״מ) נוצרת רשומת טיפול והטיפול הבא מחושב ממנה; מילוי רק אחד משני השדות מציג שגיאה. בעריכה השדות מופיעים רק לרכב בלי היסטוריית טיפולים.
-- [ ] שינוי ״מרווח בין טיפולים״ ברכב עם היסטוריה מעדכן את ״הטיפול הבא״.
-- [ ] ברכב עם ״תוקף ביטוח״ הוא מופיע ב״עבודות קרובות״ עם סטטוס; בלי תוקף מוצג הקישור ״הוסף תוקף ביטוח״.
-- [ ] בנייד (375px): בפרטי הרכב כרטיס תמונה קומפקטי (תמונה ממוזערת + כפתורי אייקון לצילום/גלריה/הסרה), בלי גלילה אופקית; בכרטיסי הרכבים והטופס התמונה קטנה.
+## Roadmap
 
-**רכבים וטיפולים**
-- [ ] הוספת רכב עם מספר קיים באותה משפחה: ״רכב עם המספר הזה כבר קיים במשפחה״.
-- [ ] תאריכים בפורמט dd/mm/yyyy עם מסכה; תאריך לא אמיתי (31/02/2026) נדחה בהודעה ברורה.
-- [ ] תאריך טסט בעוד 5 ימים: ״דחוף״; בעוד 20 יום: ״בקרוב״; אתמול: ״באיחור״, והפריט מופיע בראש ״דורש טיפול״ בלוח.
-- [ ] ״בוצע טיפול״ מעלה את הקילומטראז׳ (רק אם גבוה יותר) ומעדכן את ״הטיפול הבא״; עריכה ומחיקה של טיפול מחשבות מחדש את הטיפול הבא; מחיקה מציעה ״ביטול״ ב־toast ל־9 שניות.
-- [ ] ״סימון הרישוי כמחודש״ מציע ״ביטול״ ב־toast, ונשאר זמין בתפריט ⋯.
-- [ ] קילומטראז׳ שלא עודכן 60+ יום מציג אזהרה ״עדכנו קילומטראז'״ (אפשר לדמות ב־SQL: `update vehicles set mileage_updated_at = current_date - 90`).
-- [ ] במסך צר (375px): תפריט המבורגר, בלי גלילה אופקית, חלונות נפתחים כ־bottom sheet; Escape סוגר חלונות ותפריטים.
+- **Phase D (planned): email reminders** before license, insurance and service dates. The pure logic, cron route and a draft schema exist but are switched off (`REMINDERS_ENABLED`), pending a data-layer review.
+- Housekeeping: keep dependencies current and trim unused code as phases land.
+
+## License
+
+[MIT](LICENSE)
+
+---
+
+## תקציר בעברית
+
+אפליקציית ווב בעברית (RTL) למעקב אחרי רכבים: טסט ורישוי, ביטוח, טיפולים לפי קילומטראז׳, מצבר, צמיגים ומוסכים. מזינים מספר רכב והפרטים נשלפים אוטומטית ממאגר הנתונים הפתוח של משרד התחבורה (data.gov.il). אפשר להשתמש ברשימה אישית, או להזמין בני משפחה בקישור אישי. הבידוד בין קבוצות נאכף במסד הנתונים (Row Level Security), והפרויקט נבדק בבדיקות יחידה ובבדיקות SQL ב־CI. מדריך ההקמה המלא בעברית: [docs/dev-guide.he.md](docs/dev-guide.he.md).
