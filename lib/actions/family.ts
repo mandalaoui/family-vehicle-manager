@@ -4,34 +4,15 @@ import { revalidatePath } from "next/cache";
 import { dbErrorMessage } from "@/lib/errors";
 import { fail, isSession, NOT_SIGNED_IN, requireSession, zodFail, type ActionResult } from "@/lib/server/action-utils";
 import { getVerifiedFamilyContext } from "@/lib/server/context";
-import { rateLimited } from "@/lib/server/rate-limit";
 import { emailSchema, familyNameSchema, roleSchema, tokenSchema, uuidSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 
 const FORBIDDEN = "אין לך הרשאה לבצע את הפעולה.";
-const ALREADY_IN_FAMILY = "החשבון הזה כבר חבר במשפחה. כדי להצטרף למשפחה אחרת, עזבו קודם את המשפחה הנוכחית בהגדרות.";
-
-export async function createFamily(name: string): Promise<ActionResult> {
-  const ctx = await getVerifiedFamilyContext();
-  if (!ctx) return fail(NOT_SIGNED_IN);
-  if (ctx.membership) return fail("כבר יש לך משפחה בחשבון הזה.");
-
-  const parsed = familyNameSchema.safeParse(name);
-  if (!parsed.success) return fail(parsed.error.issues[0].message, { name: parsed.error.issues[0].message });
-  if (rateLimited(`create_family:${ctx.user.id}`, 3, 3_600_000)) return fail("יותר מדי ניסיונות ליצור משפחה. נסו שוב מאוחר יותר.");
-
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("create_family", { p_name: parsed.data });
-  if (error) return fail(dbErrorMessage(error, "create_family"));
-  revalidatePath("/", "layout");
-  return { ok: true };
-}
 
 export async function acceptInvitation(token: string): Promise<ActionResult> {
   const ctx = await getVerifiedFamilyContext();
   if (!ctx) return fail(NOT_SIGNED_IN);
-  // One family per user in the app UX: a second membership would be invisible to the user.
-  if (ctx.membership) return fail(ALREADY_IN_FAMILY);
+  // The database decides. An empty solo group is replaced; a group with vehicles or other people is kept.
   const parsed = tokenSchema.safeParse(token);
   if (!parsed.success) return fail(parsed.error.issues[0].message);
 

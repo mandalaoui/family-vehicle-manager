@@ -21,7 +21,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <Car size={30} aria-hidden />
           </span>
           <h1 className="text-2xl font-bold">ניהול רכבי המשפחה</h1>
-          <p className="text-sm text-muted">רישוי, טיפולים וקילומטראז׳ של כל הרכבים, במקום אחד לכל המשפחה.</p>
+          <p className="text-sm text-muted">רישוי, טיפולים וקילומטראז׳ של כל הרכבים, במקום אחד.</p>
         </div>
         {params.error ? (
           <div className="mb-4">

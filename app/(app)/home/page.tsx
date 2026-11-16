@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { BatteryCharging, ChevronLeft, CircleCheck, CircleDot, FileCheck, Gauge, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
+import { BatteryCharging, ChevronLeft, CircleCheck, CircleDot, FileCheck, Gauge, Mail, Plus, ShieldCheck, Wrench, Car, type LucideIcon } from "lucide-react";
 import { VehicleCard, vehicleName } from "@/components/vehicles/VehicleCard";
+import { AcceptInvitationButton } from "@/components/AcceptInvitationButton";
 import { LinkButton } from "@/components/ui/Button";
-import { EmptyState, ScreenHeader } from "@/components/ui/Layout";
+import { EmptyState, Notice, ScreenHeader } from "@/components/ui/Layout";
 import { Plate } from "@/components/ui/Plate";
 import { Status } from "@/components/ui/Status";
 import { actionableAlerts, compareAlerts, getVehicleAlerts, type AlertKind } from "@/lib/alerts";
-import { plural, todayInIsrael } from "@/lib/format";
+import { ROLE_LABELS, plural, todayInIsrael } from "@/lib/format";
 import { requireMembership } from "@/lib/server/context";
 import { signedPhotoUrls } from "@/lib/server/photos";
 import { createClient } from "@/utils/supabase/server";
@@ -29,6 +30,9 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: vehicles } = await supabase.from("vehicles").select("*").eq("family_id", membership.familyId).order("created_at", { ascending: true });
   const list = vehicles ?? [];
+  const { data: pendingInvites } = await supabase.rpc("my_pending_invitations");
+  const pending = pendingInvites ?? [];
+  const soloEmpty = membership.memberCount === 1 && list.length === 0;
   const photos = await signedPhotoUrls(supabase, list.map((v) => v.photo_path));
   const today = todayInIsrael();
 
@@ -39,7 +43,7 @@ export default async function DashboardPage() {
   return (
     <>
       <ScreenHeader
-        title={membership.familyName}
+        title="הרכבים"
         subtitle={`${list.length} ${plural(list.length, "רכב", "רכבים")} · ${rows.length} ${plural(rows.length, "פעולה פתוחה", "פעולות פתוחות")}`}
       >
         {isAdmin ? (
@@ -48,6 +52,30 @@ export default async function DashboardPage() {
           </LinkButton>
         ) : null}
       </ScreenHeader>
+
+      {pending.length > 0 ? (
+        <div className="mb-6">
+          {soloEmpty ? (
+            <Notice icon={Mail}>יש הזמנה שממתינה. קבלה מוחקת את הרשימה הריקה של החשבון הזה. אין בה רכבים.</Notice>
+          ) : (
+            <Notice tone="warn" icon={Mail}>
+              {list.length > 0
+                ? "יש הזמנה שממתינה. כבר יש רכבים ברשימה, אז היא לא מתקבלת ושום רכב לא נמחק."
+                : "יש הזמנה שממתינה. בשיתוף הזה יש עוד משתתפים, אז היא לא מתקבלת ושום דבר לא נמחק."}
+            </Notice>
+          )}
+          <ul className="mt-3 flex flex-col gap-3">
+            {pending.map((i) => (
+              <li key={i.token} className="rounded-2xl border border-silver-300 bg-white p-4">
+                <p className="mb-3 text-sm">
+                  <strong>{i.family_name}</strong> · {ROLE_LABELS[i.role]}
+                </p>
+                {soloEmpty ? <AcceptInvitationButton token={i.token} /> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <section aria-labelledby="actions-h" className="mb-8">
         <h2 id="actions-h" className="mb-3 text-lg font-bold">
@@ -94,11 +122,11 @@ export default async function DashboardPage() {
 
       <section aria-labelledby="cars-h">
         <h2 id="cars-h" className="mb-3 text-lg font-bold">
-          הרכבים שלנו
+          {membership.memberCount > 1 ? "הרכבים שלנו" : "כל הרכבים"}
         </h2>
         {list.length === 0 ? (
-          <EmptyState icon={Car} title="עדיין אין רכבים במשפחה">
-            {isAdmin ? "לחצו על ״הוספת רכב״ והזינו את הפרטים כדי להתחיל לעקוב אחרי רישוי וטיפולים." : "מנהל המשפחה יכול להוסיף רכב ראשון."}
+          <EmptyState icon={Car} title="עדיין אין רכבים">
+            {isAdmin ? "לחצו על ״הוספת רכב״ והזינו את הפרטים כדי להתחיל לעקוב אחרי רישוי וטיפולים." : "מנהל יכול להוסיף רכב ראשון."}
           </EmptyState>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

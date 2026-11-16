@@ -104,7 +104,7 @@ export function GarageManager({ garages, isAdmin }: { garages: Garage[]; isAdmin
 
   return (
     <>
-      <ScreenHeader title="מוסכים" subtitle={`${garages.length} מוסכים ברשימה המשפחתית`}>
+      <ScreenHeader title="מוסכים" subtitle={`${garages.length} מוסכים ברשימה`}>
         <Button icon={Plus} onClick={() => setModal({ kind: "add" })} className="w-full sm:w-auto">
           הוספת מוסך
         </Button>

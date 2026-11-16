@@ -236,8 +236,8 @@ export type ServiceLogInput = z.input<typeof serviceLogSchema>;
 export const familyNameSchema = z
   .string()
   .trim()
-  .min(1, "הזינו שם למשפחה, למשל ״משפחת כהן״")
-  .max(60, "שם המשפחה ארוך מדי (עד 60 תווים)");
+  .min(1, "הזינו שם לשיתוף")
+  .max(60, "השם ארוך מדי (עד 60 תווים)");
 
 export const emailSchema = z
   .string()

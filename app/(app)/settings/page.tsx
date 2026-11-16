@@ -7,7 +7,7 @@ import { inviteDisplayStatus } from "@/lib/invites";
 import { requireMembership } from "@/lib/server/context";
 import { createClient } from "@/utils/supabase/server";
 
-export const metadata = { title: "הגדרות משפחה · ניהול רכבי המשפחה" };
+export const metadata = { title: "שיתוף · ניהול רכבי המשפחה" };
 
 export default async function SettingsPage() {
   const ctx = await requireMembership();
@@ -37,7 +37,7 @@ export default async function SettingsPage() {
     const p = m.profiles;
     return {
       userId: m.user_id,
-      name: p?.full_name?.trim() || p?.email || "חבר משפחה",
+      name: p?.full_name?.trim() || p?.email || "משתתף",
       email: p?.email ?? null,
       role: m.role,
       isYou: m.user_id === userId,
@@ -55,23 +55,23 @@ export default async function SettingsPage() {
 
   return (
     <>
-      <ScreenHeader title="הגדרות משפחה" subtitle={familyName} />
+      <ScreenHeader title="שיתוף" subtitle={familyName} />
       {!isAdmin ? (
         <div className="mb-4">
-          <Notice icon={Info}>מצב צפייה בלבד. רק מנהל יכול להזמין, להסיר, לשנות תפקידים ולשנות את שם המשפחה.</Notice>
+          <Notice icon={Info}>מצב צפייה בלבד. רק מנהל יכול להזמין, להסיר, לשנות תפקידים ולשנות את שם השיתוף.</Notice>
         </div>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
-        <Section icon={Users} title="חברי המשפחה" className="lg:col-span-2">
+        <Section icon={Users} title="משתתפים" className="lg:col-span-2">
           <MembersList members={members} isAdmin={isAdmin} />
         </Section>
 
         {isAdmin ? (
           <>
-            <Section icon={UserPlus} title="הזמנת בן משפחה">
+            <Section icon={UserPlus} title="הזמנת משתתף">
               <InvitePanel invites={invites} />
             </Section>
-            <Section icon={Pencil} title="פרטי המשפחה">
+            <Section icon={Pencil} title="שם השיתוף">
               <RenameFamily name={familyName} />
             </Section>
           </>

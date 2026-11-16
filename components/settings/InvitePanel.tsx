@@ -25,7 +25,7 @@ export interface InviteView {
 function LinkBox({ link, onCopy }: { link: string; onCopy: () => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-green-300 bg-green-50 p-3">
-      <p className="text-sm font-semibold text-green-900">ההזמנה נוצרה. שלחו את הקישור לבן המשפחה (לא נשלח אימייל):</p>
+      <p className="text-sm font-semibold text-green-900">ההזמנה נוצרה. שלחו את הקישור למשתתף (לא נשלח אימייל):</p>
       <p dir="ltr" className="select-all break-all rounded-lg border border-green-300 bg-white p-2 text-start text-sm">
         {link}
       </p>
@@ -91,7 +91,7 @@ export function InvitePanel({ invites }: { invites: InviteView[] }) {
   return (
     <>
       <form onSubmit={submit} noValidate className="flex flex-col gap-3">
-        <Field id="invite-email" label="כתובת Google של בן המשפחה" error={emailError} hint="ההזמנה תעבוד רק עם חשבון Google בכתובת הזאת. תוקף ההזמנה: 7 ימים.">
+        <Field id="invite-email" label="כתובת Google של המשתתף" error={emailError} hint="ההזמנה תעבוד רק עם חשבון Google בכתובת הזאת. תוקף ההזמנה: 7 ימים.">
           <TextInput id="invite-email" ltr type="email" autoComplete="off" placeholder="name@gmail.com" value={email} error={emailError} onChange={(e) => { setEmail(e.target.value); setEmailError(undefined); }} />
         </Field>
         <Field id="invite-role" label="תפקיד">

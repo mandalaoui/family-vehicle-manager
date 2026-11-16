@@ -11,10 +11,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 vi.mock("@/lib/actions/vehicles", () => ({ createVehicle: vi.fn(), updateVehicle: vi.fn() }));
 vi.mock("@/lib/actions/battery-tires", () => ({ updateBattery: vi.fn(), updateTires: vi.fn() }));
 vi.mock("@/lib/actions/garages", () => ({ createGarage: vi.fn(), updateGarage: vi.fn(), deleteGarage: vi.fn() }));
-vi.mock("@/lib/actions/family", () => ({ createFamily: vi.fn() }));
 vi.mock("@/lib/upload-photo", () => ({ uploadVehiclePhoto: vi.fn() }));
 
-import { OnboardingForms } from "@/components/OnboardingForms";
 import { GarageManager } from "@/components/garages/GarageManager";
 import { Status } from "@/components/ui/Status";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -99,15 +97,6 @@ describe("axe: structure and names", () => {
     const { container } = render(
       <ToastProvider>
         <VehicleForm familyId="f" />
-      </ToastProvider>,
-    );
-    expect(await violations(container)).toEqual([]);
-  });
-
-  it("onboarding forms", async () => {
-    const { container } = render(
-      <ToastProvider>
-        <OnboardingForms />
       </ToastProvider>,
     );
     expect(await violations(container)).toEqual([]);

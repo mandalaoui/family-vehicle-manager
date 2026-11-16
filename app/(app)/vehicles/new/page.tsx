@@ -14,8 +14,8 @@ export default async function NewVehiclePage() {
   if (!isAdmin) {
     return (
       <div className="mx-auto max-w-md pt-6">
-        <EmptyState icon={Shield} title="הפעולה הזאת פתוחה למנהלי המשפחה בלבד">
-          כדי להוסיף רכב, בקשו ממנהל המשפחה.
+        <EmptyState icon={Shield} title="הפעולה הזאת פתוחה למנהלים בלבד">
+          כדי להוסיף רכב, בקשו ממנהל.
         </EmptyState>
         <div className="mt-4 flex justify-center">
           <LinkButton href="/home" variant="neutral">

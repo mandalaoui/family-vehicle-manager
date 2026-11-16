@@ -12,7 +12,7 @@ const heebo = Heebo({
 
 export const metadata: Metadata = {
   title: "ניהול רכבי המשפחה",
-  description: "מעקב משפחתי אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.",
+  description: "מעקב אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.",
   verification: {
     google: "bTXYzsQ3EvL6fsD0GcG-Vk3l0o6Q2_8kFT-b5X5vZxU",
   },

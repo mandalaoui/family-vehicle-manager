@@ -188,6 +188,7 @@ export type Database = {
     Views: { [_ in never]: never };
     Functions: {
       create_family: { Args: { p_name: string }; Returns: string };
+      ensure_personal_family: { Args: never; Returns: string };
       create_invitation: { Args: { p_family_id: string; p_email: string; p_role?: string }; Returns: string };
       revoke_invitation: { Args: { p_invitation_id: string }; Returns: undefined };
       accept_invitation: { Args: { p_token: string }; Returns: string };

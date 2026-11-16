@@ -8,6 +8,8 @@ export interface Membership {
   familyId: string;
   familyName: string;
   role: Role;
+  /** 1 means the user is alone, so the app hides sharing until they ask for it. */
+  memberCount: number;
 }
 
 /** The few user fields the app needs. Built either from a verified JWT or from the Auth server. */
@@ -56,7 +58,16 @@ async function loadMembership(userId: string): Promise<Membership | null> {
   const { data: rows } = await supabase.from("family_members").select("family_id, role, created_at, families(id, name)").eq("user_id", userId);
   const member = pickMembership(rows ?? []);
   if (!member || !member.families) return null;
-  return { familyId: member.families.id, familyName: member.families.name, role: member.role };
+  const { count } = await supabase
+    .from("family_members")
+    .select("user_id", { count: "exact", head: true })
+    .eq("family_id", member.family_id);
+  return {
+    familyId: member.families.id,
+    familyName: member.families.name,
+    role: member.role,
+    memberCount: count && count > 0 ? count : 1,
+  };
 }
 
 export const getFamilyContext = cache(async (): Promise<FamilyContext | null> => {
@@ -79,11 +90,11 @@ export interface MemberContext {
 
 /**
  * For pages inside the app: the signed-in user with a family. Anyone else is redirected instead of
- * crashing (no session -> /login, no family -> /onboarding), even if the layout guard runs in parallel.
+ * crashing (no session -> /login, no family -> /join), even if the layout guard runs in parallel.
  */
 export async function requireMembership(): Promise<MemberContext> {
   const ctx = await getFamilyContext();
   if (!ctx) redirect("/login");
-  if (!ctx.membership) redirect("/onboarding");
+  if (!ctx.membership) redirect("/join");
   return { user: ctx.user, membership: ctx.membership };
 }

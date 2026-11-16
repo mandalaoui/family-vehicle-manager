@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Car, Check, LogOut, Menu, Settings, Wrench, X } from "lucide-react";
+import { Car, Check, LogOut, Menu, Settings, UserPlus, Wrench, X } from "lucide-react";
 
 const TABS = [
   { href: "/home", label: "רכבים", icon: Car, match: (p: string) => p === "/home" || p.startsWith("/vehicles") },
@@ -21,8 +21,9 @@ function SignOut({ className, children }: { className: string; children: React.R
   );
 }
 
-export function AppHeader({ familyName }: { familyName: string }) {
+export function AppHeader({ familyName, showSettings }: { familyName: string | null; showSettings: boolean }) {
   const pathname = usePathname();
+  const tabs = showSettings ? TABS : TABS.filter((t) => t.href !== "/settings");
   const [open, setOpen] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
   const headerRef = useRef<HTMLElement>(null);
@@ -65,12 +66,12 @@ export function AppHeader({ familyName }: { familyName: string }) {
           </span>
           <span className="min-w-0">
             <span className="block text-base font-bold leading-tight">ניהול רכבי המשפחה</span>
-            <span className="block truncate text-xs text-muted">{familyName}</span>
+            {familyName ? <span className="block truncate text-xs text-muted">{familyName}</span> : null}
           </span>
         </Link>
 
         <nav aria-label="ניווט ראשי" className="hidden items-center gap-1 md:flex">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const active = t.match(pathname);
             return (
               <Link
@@ -84,6 +85,12 @@ export function AppHeader({ familyName }: { familyName: string }) {
               </Link>
             );
           })}
+          {showSettings ? null : (
+            <Link href="/settings" className="flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold text-ink hover:bg-silver-100">
+              <UserPlus size={18} aria-hidden />
+              שתף עם אחרים
+            </Link>
+          )}
           <SignOut className="flex min-h-[44px] items-center gap-2 rounded-xl px-4 text-sm font-semibold text-ink hover:bg-silver-100">
             <LogOut size={18} aria-hidden />
             התנתקות
@@ -105,7 +112,7 @@ export function AppHeader({ familyName }: { familyName: string }) {
       {open ? (
         <div id="mobile-menu" className="absolute inset-x-0 top-full border-b border-silver-300 bg-white shadow-lg md:hidden">
           <nav aria-label="ניווט ראשי" className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-3">
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const active = t.match(pathname);
               return (
                 <Link
@@ -120,6 +127,12 @@ export function AppHeader({ familyName }: { familyName: string }) {
                 </Link>
               );
             })}
+            {showSettings ? null : (
+              <Link href="/settings" className="flex min-h-[48px] items-center gap-3 rounded-xl px-3 text-base font-semibold text-ink hover:bg-silver-100">
+                <UserPlus size={22} aria-hidden />
+                שתף עם אחרים
+              </Link>
+            )}
             <div className="mt-2 border-t border-silver-200 pt-2">
               <SignOut className="flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 text-start text-base font-semibold text-ink hover:bg-silver-100">
                 <LogOut size={22} aria-hidden />
