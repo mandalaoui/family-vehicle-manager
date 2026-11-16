@@ -20,7 +20,7 @@ export default async function VehiclesPage() {
 
   return (
     <>
-      <ScreenHeader title="הרכבים" subtitle={`${list.length} ${plural(list.length, "רכב", "רכבים")} במשפחה`}>
+      <ScreenHeader title="הרכבים" subtitle={`${list.length} ${plural(list.length, "רכב", "רכבים")}`}>
         {isAdmin ? (
           <LinkButton href="/vehicles/new" icon={Plus} className="w-full sm:w-auto">
             הוספת רכב
@@ -28,8 +28,8 @@ export default async function VehiclesPage() {
         ) : null}
       </ScreenHeader>
       {list.length === 0 ? (
-        <EmptyState icon={Car} title="עדיין אין רכבים במשפחה">
-          {isAdmin ? "לחצו על ״הוספת רכב״ כדי להתחיל." : "מנהל המשפחה יכול להוסיף רכב ראשון."}
+        <EmptyState icon={Car} title="עדיין אין רכבים">
+          {isAdmin ? "לחצו על ״הוספת רכב״ כדי להתחיל." : "מנהל יכול להוסיף רכב ראשון."}
         </EmptyState>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -95,7 +95,7 @@ export function ServiceModal({
         </Field>
         {familyGarages.length > 0 ? (
           <div className="sm:col-span-2">
-            <Field id="s-garage-id" label="מוסך מהרשימה" error={errors.garage_id} hint="אפשר לבחור מוסך מהרשימה המשפחתית, או להקליד שם אחר למטה">
+            <Field id="s-garage-id" label="מוסך מהרשימה" error={errors.garage_id} hint="אפשר לבחור מוסך מהרשימה, או להקליד שם אחר למטה">
               <SelectInput id="s-garage-id" value={garageId} error={errors.garage_id} onChange={setGarageId} options={familyGarages.map((g) => ({ value: g.id, label: g.name }))} placeholder="ללא (הקלדה חופשית)" />
             </Field>
           </div>

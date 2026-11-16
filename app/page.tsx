@@ -7,13 +7,13 @@ export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "ניהול רכבי המשפחה",
-  description: "מעקב משפחתי אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.",
+  description: "מעקב אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.",
 };
 
 export default async function LandingPage() {
   const ctx = await getFamilyContext();
   if (ctx?.membership) redirect("/home");
-  if (ctx) redirect("/onboarding");
+  if (ctx) redirect("/join");
 
   return (
     <main className="mx-auto flex flex-1 max-w-md flex-col justify-center px-4 py-10">
@@ -22,7 +22,7 @@ export default async function LandingPage() {
           <Car size={30} aria-hidden />
         </span>
         <h1 className="text-2xl font-bold">ניהול רכבי המשפחה</h1>
-        <p className="mt-2 text-sm text-muted">מעקב משפחתי אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.</p>
+        <p className="mt-2 text-sm text-muted">מעקב אחרי רישוי, טיפולים וקילומטראז׳ של הרכבים.</p>
         <div className="mt-6">
           <LinkButton href="/login" className="w-full">
             התחברות

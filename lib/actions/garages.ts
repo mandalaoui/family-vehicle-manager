@@ -55,7 +55,7 @@ export async function updateGarage(id: string, input: GarageInput): Promise<Acti
 export async function deleteGarage(id: string): Promise<ActionResult> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
-  if (s.role !== "admin") return fail("מחיקת מוסך פתוחה למנהלי המשפחה בלבד.");
+  if (s.role !== "admin") return fail("מחיקת מוסך פתוחה למנהלים בלבד.");
   const gid = uuidSchema.safeParse(id);
   if (!gid.success) return fail(BAD_REQUEST);
 

@@ -174,7 +174,7 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
       }
       if ("warning" in res && res.warning) toast(res.warning, { type: "error" });
       const name = f.nickname.trim() || `${f.make.trim()} ${f.model.trim()}`;
-      toast(editing ? "פרטי הרכב עודכנו." : `״${name}״ נוסף למשפחה.`);
+      toast(editing ? "פרטי הרכב עודכנו." : `״${name}״ נוסף.`);
       router.push(`/vehicles/${vid}`);
       router.refresh();
     });

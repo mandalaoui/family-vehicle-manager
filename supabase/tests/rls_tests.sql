@@ -109,10 +109,16 @@ select chk('C cannot see logs', public.cnt_as('cccccccc-0000-0000-0000-000000000
 create temp table veh_id as select id from public.vehicles limit 1; grant select on veh_id to authenticated;
 select chk('C cannot insert log', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.service_logs(vehicle_id,service_date,mileage) values ((select id from veh_id),current_date,1) $q$), 'new row violates row-level security policy for table "service_logs"');
 select chk('B cannot create a 2nd family (single-family guard)', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ select public.create_family('Two') $q$), 'already_in_family');
--- Legacy data: simulate a user who already holds two memberships (created before the guard existed).
 insert into public.families(name, created_by) values ('Two', 'bbbbbbbb-0000-0000-0000-000000000002');
-insert into public.family_members(family_id, user_id, role) select id, 'bbbbbbbb-0000-0000-0000-000000000002', 'admin' from public.families where name='Two';
-select chk('cannot move vehicle across families', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ update public.vehicles set family_id=(select id from public.families where name='Two') $q$), 'forbidden');
+do $$
+begin
+  insert into public.family_members(family_id, user_id, role)
+  select id, 'bbbbbbbb-0000-0000-0000-000000000002', 'admin' from public.families where name='Two';
+  perform public.chk('second membership blocked by unique index', 'inserted', 'duplicate key value violates unique constraint "family_members_one_per_user"');
+exception when unique_violation then
+  perform public.chk('second membership blocked by unique index', sqlerrm, 'duplicate key value violates unique constraint "family_members_one_per_user"');
+end $$;
+select chk('cannot move vehicle across families', public.run_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com',$q$ update public.vehicles set family_id=(select id from public.families where name='Two') $q$), 'new row violates row-level security policy for table "vehicles"');
 
 -- cascade delete of a family with its only admin (as superuser)
 delete from public.families where name='Two';
@@ -196,8 +202,9 @@ create temp table inv_tok2(t text);
 grant all on inv_tok2 to authenticated;
 select chk('p2: A creates own family', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ select public.create_family('Mizrahi') $q$), 'ok');
 select chk('p2: A invites C', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ insert into inv_tok2 select public.create_invitation((select id from public.families where name='Mizrahi'),'c@x.com','member') $q$), 'ok');
-select chk('p2: existing member cannot accept', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok2))), 'already_in_family');
 select chk('p2: C adds vehicle', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ insert into public.vehicles(family_id,plate,make,model) select id,'5551234','Kia','Niro' from public.families where name='Levi' $q$), 'ok');
+select chk('p2: existing member with vehicles cannot accept', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok2))), 'group_has_vehicles');
+select chk('p2: C vehicle kept', (select count(*)::text from public.vehicles where plate='5551234'), '1');
 select chk('p2: complete_service still works', public.run_as('cccccccc-0000-0000-0000-000000000003','c@x.com',$q$ select public.complete_service((select id from public.vehicles where plate='5551234'), current_date, 1000, null, null, null) $q$), 'ok');
 
 -- phase 2 features: garages, garage-linked logs, create_family guard, my_pending_invitations
@@ -223,5 +230,33 @@ select chk('p2: create_family refused when already member', public.run_as('ccccc
 select chk('p2: pending invitations for invitee', public.cnt_as('cccccccc-0000-0000-0000-000000000003','c@x.com','select * from public.my_pending_invitations()'), '1');
 select chk('p2: pending invitations hidden from others', public.cnt_as('bbbbbbbb-0000-0000-0000-000000000002','b@x.com','select * from public.my_pending_invitations()'), '0');
 select chk('p2: pending invitations anon blocked', public.cnt_as(null,null,'select * from public.my_pending_invitations()'), 'permission denied for function my_pending_invitations');
+
+-- personal group: idempotent create, accept replaces an empty solo group, refuses when anyone else is in it
+insert into auth.users(id,email) values
+ ('dddddddd-0000-0000-0000-000000000004','d@x.com'),
+ ('eeeeeeee-0000-0000-0000-000000000005','e@x.com'),
+ ('ffffffff-0000-0000-0000-000000000006','f@x.com');
+select chk('ensure anon blocked', public.run_as(null,null,$q$ select public.ensure_personal_family() $q$), 'permission denied for function ensure_personal_family');
+select chk('ensure creates', public.run_as('dddddddd-0000-0000-0000-000000000004','d@x.com',$q$ select public.ensure_personal_family() $q$), 'ok');
+select chk('ensure name', (select f.name from public.families f join public.family_members m on m.family_id=f.id where m.user_id='dddddddd-0000-0000-0000-000000000004'), 'הרכבים שלי');
+select chk('ensure again', public.run_as('dddddddd-0000-0000-0000-000000000004','d@x.com',$q$ select public.ensure_personal_family() $q$), 'ok');
+select chk('ensure one membership', (select count(*)::text from public.family_members where user_id='dddddddd-0000-0000-0000-000000000004'), '1');
+create temp table inv_tok3(t text);
+grant all on inv_tok3 to authenticated;
+select chk('A invites D', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ insert into inv_tok3 select public.create_invitation((select id from public.families where name='Mizrahi'),'d@x.com','member') $q$), 'ok');
+select chk('D accepts empty group', public.run_as('dddddddd-0000-0000-0000-000000000004','d@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok3))), 'ok');
+select chk('personal group deleted', (select count(*)::text from public.families where name='הרכבים שלי'), '0');
+select chk('D joined Mizrahi', (select f.name from public.families f join public.family_members m on m.family_id=f.id where m.user_id='dddddddd-0000-0000-0000-000000000004'), 'Mizrahi');
+select chk('ensure keeps D in Mizrahi', public.run_as('dddddddd-0000-0000-0000-000000000004','d@x.com',$q$ select public.ensure_personal_family() $q$), 'ok');
+select chk('D still one membership', (select count(*)::text from public.family_members where user_id='dddddddd-0000-0000-0000-000000000004'), '1');
+select chk('ensure for E', public.run_as('eeeeeeee-0000-0000-0000-000000000005','e@x.com',$q$ select public.ensure_personal_family() $q$), 'ok');
+insert into public.family_members(family_id, user_id, role)
+select family_id, 'ffffffff-0000-0000-0000-000000000006', 'member'
+from public.family_members where user_id='eeeeeeee-0000-0000-0000-000000000005';
+create temp table inv_tok4(t text);
+grant all on inv_tok4 to authenticated;
+select chk('A invites E', public.run_as('aaaaaaaa-0000-0000-0000-000000000001','a@x.com',$q$ insert into inv_tok4 select public.create_invitation((select id from public.families where name='Mizrahi'),'e@x.com','member') $q$), 'ok');
+select chk('E with another member cannot accept', public.run_as('eeeeeeee-0000-0000-0000-000000000005','e@x.com',format('select public.accept_invitation(%L)', (select t from inv_tok4))), 'group_has_members');
+select chk('E group kept', (select count(*)::text from public.family_members where user_id='eeeeeeee-0000-0000-0000-000000000005'), '1');
 
 select n, case when got is not distinct from want then 'PASS' else 'FAIL' end as r, name, got, want from public.zz_results order by n;

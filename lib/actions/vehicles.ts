@@ -16,7 +16,7 @@ const NOT_FOUND = "הרכב לא נמצא. ייתכן שהוא נמחק.";
 export async function createVehicle(input: VehicleInput): Promise<ActionResult<{ id: string; warning?: string }>> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
-  if (s.role !== "admin") return fail("הוספת רכב פתוחה למנהלי המשפחה בלבד.");
+  if (s.role !== "admin") return fail("הוספת רכב פתוחה למנהלים בלבד.");
 
   const parsed = vehicleSchema.safeParse(input);
   if (!parsed.success) return zodFail(parsed.error);
@@ -102,7 +102,7 @@ export async function updateVehicle(id: string, input: VehicleInput): Promise<Ac
 export async function deleteVehicle(id: string): Promise<ActionResult> {
   const s = await requireSession();
   if (!isSession(s)) return fail(s.error);
-  if (s.role !== "admin") return fail("מחיקת רכב פתוחה למנהלי המשפחה בלבד.");
+  if (s.role !== "admin") return fail("מחיקת רכב פתוחה למנהלים בלבד.");
   const vid = uuidSchema.safeParse(id);
   if (!vid.success) return fail(BAD_REQUEST);
 

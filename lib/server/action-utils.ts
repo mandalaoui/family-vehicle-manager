@@ -8,7 +8,7 @@ export type ActionResult<T extends object = object> =
   | { ok: false; error: string; fieldErrors?: Record<string, string> };
 
 export const NOT_SIGNED_IN = "ההתחברות פגה. התחברו שוב.";
-export const NO_FAMILY = "לא נמצאה משפחה לחשבון הזה.";
+export const NO_FAMILY = "לא נמצא שיתוף לחשבון הזה.";
 
 export function fail(error: string, fieldErrors?: Record<string, string>): { ok: false; error: string; fieldErrors?: Record<string, string> } {
   return { ok: false, error, fieldErrors };

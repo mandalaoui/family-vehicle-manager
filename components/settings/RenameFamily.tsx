@@ -25,14 +25,14 @@ export function RenameFamily({ name }: { name: string }) {
         toast(res.error, { type: "error" });
         return;
       }
-      toast("שם המשפחה עודכן.");
+      toast("השם עודכן.");
       router.refresh();
     });
   }
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
-      <Field id="family-rename" label="שם המשפחה" error={error}>
+      <Field id="family-rename" label="שם השיתוף" error={error}>
         <TextInput id="family-rename" value={value} error={error} maxLength={60} onChange={(e) => setValue(e.target.value)} />
       </Field>
       <Button type="submit" icon={Check} loading={pending} disabled={value.trim() === name} className="self-start">

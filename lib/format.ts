@@ -106,4 +106,4 @@ export const COLOR_HEX: Record<string, string> = {
   אחר: "#a8a29e",
 };
 
-export const ROLE_LABELS = { admin: "מנהל", member: "חבר משפחה" } as const;
+export const ROLE_LABELS = { admin: "מנהל", member: "משתתף" } as const;

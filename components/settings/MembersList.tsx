@@ -55,7 +55,7 @@ export function MembersList({ members, isAdmin }: { members: MemberView[]; isAdm
         setError(res.error);
         return;
       }
-      toast(`${m.name} הוסר/ה מהמשפחה.`);
+      toast(`${m.name} הוסר/ה.`);
       setRemoving(null);
       router.refresh();
     });
@@ -70,8 +70,8 @@ export function MembersList({ members, isAdmin }: { members: MemberView[]; isAdm
         setError(res.error);
         return;
       }
-      toast("עזבתם את המשפחה.", { type: "info" });
-      router.replace("/onboarding");
+      toast("עזבתם את השיתוף.", { type: "info" });
+      router.replace("/home");
       router.refresh();
     });
   }
@@ -80,15 +80,15 @@ export function MembersList({ members, isAdmin }: { members: MemberView[]; isAdm
     const items: MenuItem[] = [];
     if (isAdmin) {
       items.push({
-        label: m.role === "admin" ? "הפיכה לחבר רגיל" : "הפיכה למנהל",
+        label: m.role === "admin" ? "הפיכה למשתתף" : "הפיכה למנהל",
         icon: Shield,
         onClick: () => toggleRole(m),
       });
     }
     if (m.isYou) {
-      items.push({ label: "עזיבת המשפחה", icon: LogOut, danger: true, onClick: () => { setModalError(null); setLeaving(true); } });
+      items.push({ label: "עזיבת השיתוף", icon: LogOut, danger: true, onClick: () => { setModalError(null); setLeaving(true); } });
     } else if (isAdmin) {
-      items.push({ label: "הסרה מהמשפחה", icon: Trash2, danger: true, onClick: () => { setModalError(null); setRemoving(m); } });
+      items.push({ label: "הסרה", icon: Trash2, danger: true, onClick: () => { setModalError(null); setRemoving(m); } });
     }
     return items;
   }
@@ -134,26 +134,26 @@ export function MembersList({ members, isAdmin }: { members: MemberView[]; isAdm
 
       {removing ? (
         <ConfirmModal
-          title="הסרת בן משפחה"
+          title="הסרת משתתף"
           danger
           confirmLabel="הסרה"
           pending={pending}
           error={modalError}
           onClose={() => setRemoving(null)}
           onConfirm={confirmRemove}
-          body={`להסיר את ${removing.name} מהמשפחה? לא תהיה לו/ה יותר גישה לרכבים.`}
+          body={`להסיר את ${removing.name}? לא תהיה לו/ה יותר גישה לרכבים.`}
         />
       ) : null}
       {leaving ? (
         <ConfirmModal
-          title="עזיבת המשפחה"
+          title="עזיבת השיתוף"
           danger
           confirmLabel="עזיבה"
           pending={pending}
           error={modalError}
           onClose={() => setLeaving(false)}
           onConfirm={confirmLeave}
-          body="לעזוב את המשפחה? לא תהיה לכם יותר גישה לרכבים שלה, ותצטרכו הזמנה חדשה כדי לחזור."
+          body="לעזוב את השיתוף? לא תהיה לכם יותר גישה לרכבים של שאר המשתתפים."
         />
       ) : null}
     </>

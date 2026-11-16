@@ -22,7 +22,7 @@ export function AcceptInvitationButton({ token }: { token: string }) {
         setError(res.error);
         return;
       }
-      toast("הצטרפתם למשפחה. ברוכים הבאים!");
+      toast("הצטרפתם.");
       router.replace("/home");
       router.refresh();
     });
@@ -31,7 +31,7 @@ export function AcceptInvitationButton({ token }: { token: string }) {
   return (
     <>
       <Button loading={pending} onClick={accept} className="w-full">
-        הצטרפות למשפחה
+        הצטרפות
       </Button>
       {error ? (
         <Notice tone="error" icon={TriangleAlert} role="alert">

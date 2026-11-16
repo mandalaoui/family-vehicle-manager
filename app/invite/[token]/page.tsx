@@ -9,11 +9,11 @@ import { getFamilyContext } from "@/lib/server/context";
 import { tokenSchema } from "@/lib/validation";
 import { createClient } from "@/utils/supabase/server";
 
-export const metadata = { title: "הזמנה למשפחה · ניהול רכבי המשפחה" };
+export const metadata = { title: "הזמנת משתתף · ניהול רכבי המשפחה" };
 
 const STATUS_MESSAGES = {
-  expired: "תוקף ההזמנה פג. בקשו ממנהל המשפחה הזמנה חדשה.",
-  revoked: "ההזמנה בוטלה על ידי מנהל המשפחה.",
+  expired: "תוקף ההזמנה פג. בקשו ממנהל הזמנה חדשה.",
+  revoked: "ההזמנה בוטלה על ידי מנהל.",
   accepted: "ההזמנה כבר נוצלה.",
   invalid: "קישור ההזמנה לא תקין.",
 } as const;
@@ -42,7 +42,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
       <Shell>
         <h1 className="mb-3 text-xl font-bold">ההזמנה לא נמצאה</h1>
         <Notice tone="error" icon={TriangleAlert} role="alert">
-          {STATUS_MESSAGES.invalid} בקשו ממנהל המשפחה לשלוח קישור חדש.
+          {STATUS_MESSAGES.invalid} בקשו ממנהל לשלוח קישור חדש.
         </Notice>
       </Shell>
     );
@@ -63,6 +63,16 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   const ctx = await getFamilyContext();
   const user = ctx?.user ?? null;
   const next = `/invite/${parsed.data}`;
+  let vehicleCount = 0;
+  if (ctx?.membership) {
+    const supabase = await createClient();
+    const { count } = await supabase
+      .from("vehicles")
+      .select("id", { count: "exact", head: true })
+      .eq("family_id", ctx.membership.familyId);
+    vehicleCount = count ?? 0;
+  }
+  const emptySolo = ctx?.membership != null && ctx.membership.memberCount === 1 && vehicleCount === 0;
 
   return (
     <Shell>
@@ -72,7 +82,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         </span>
         <h1 className="text-xl font-bold">הוזמנתם להצטרף ל{preview.family_name}</h1>
         <p className="text-sm text-muted">
-          התפקיד שלכם במשפחה: <strong>{ROLE_LABELS[preview.role]}</strong>
+          התפקיד שלכם: <strong>{ROLE_LABELS[preview.role]}</strong>
         </p>
       </div>
 
@@ -80,15 +90,6 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         <div className="flex flex-col gap-3">
           <Notice icon={Info}>התחברו עם חשבון ה־Google שאליו נשלחה ההזמנה כדי להצטרף.</Notice>
           <GoogleSignInButton next={next} />
-        </div>
-      ) : ctx?.membership ? (
-        <div className="flex flex-col gap-3">
-          <Notice tone="warn" icon={Info} role="alert">
-            החשבון הזה כבר חבר במשפחה. כדי להצטרף למשפחה אחרת, עזבו קודם את המשפחה הנוכחית בהגדרות.
-          </Notice>
-          <Link href="/settings" className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-silver-300 bg-white px-4 font-semibold">
-            להגדרות המשפחה
-          </Link>
         </div>
       ) : preview.email_matches === false ? (
         <div className="flex flex-col gap-3">
@@ -102,11 +103,26 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
             </Button>
           </form>
         </div>
+      ) : ctx?.membership && !emptySolo ? (
+        <div className="flex flex-col gap-3">
+          <Notice tone="warn" icon={Info} role="alert">
+            {vehicleCount > 0
+              ? "כבר יש רכבים בשיתוף הזה, אז ההזמנה לא מתקבלת. שום רכב לא נמחק."
+              : "בשיתוף הזה יש עוד משתתפים, אז ההזמנה לא מתקבלת. שום דבר לא נמחק."}
+          </Notice>
+          <Link href="/home" className="inline-flex min-h-[44px] items-center justify-center rounded-xl border border-silver-300 bg-white px-4 font-semibold">
+            חזרה לרכבים
+          </Link>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <Notice tone="success" icon={CircleCheck}>
-            מחוברים עם החשבון הנכון. אפשר להצטרף.
-          </Notice>
+          {emptySolo ? (
+            <Notice icon={Info}>קבלת ההזמנה מוחקת את הרשימה הריקה של החשבון הזה. אין בה רכבים.</Notice>
+          ) : (
+            <Notice tone="success" icon={CircleCheck}>
+              מחוברים עם החשבון הנכון. אפשר להצטרף.
+            </Notice>
+          )}
           <AcceptInvitationButton token={parsed.data} />
         </div>
       )}
