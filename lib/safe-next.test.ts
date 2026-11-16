@@ -8,9 +8,9 @@ describe("safeNext", () => {
   });
   it("rejects external and protocol-relative targets", () => {
     for (const bad of ["//evil.com", "https://evil.com", "/\\evil.com", "evil.com", "javascript:alert(1)", "/a\nb", ""]) {
-      expect(safeNext(bad)).toBe("/");
+      expect(safeNext(bad)).toBe("/home");
     }
-    expect(safeNext(null)).toBe("/");
+    expect(safeNext(null)).toBe("/home");
     expect(safeNext(undefined, "/x")).toBe("/x");
   });
 });

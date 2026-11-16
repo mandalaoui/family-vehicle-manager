@@ -46,7 +46,7 @@ export function OnboardingForms() {
         return;
       }
       toast("המשפחה נוצרה. עכשיו אפשר להוסיף רכב ראשון.");
-      router.replace("/");
+      router.replace("/home");
       router.refresh();
     });
   }

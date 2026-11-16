@@ -12,7 +12,7 @@ export const metadata = { title: "ברוכים הבאים · ניהול רכבי
 export default async function OnboardingPage() {
   const ctx = await getFamilyContext();
   if (!ctx) redirect("/login");
-  if (ctx.membership) redirect("/");
+  if (ctx.membership) redirect("/home");
 
   // Invitations addressed to this Google account: a new user who skipped the link still finds them here.
   const supabase = await createClient();
