@@ -68,7 +68,7 @@ flowchart LR
 - **Rate limiting** on the plate lookup (20 requests/min/user) and manual refresh (10/min/user): a best-effort in-memory sliding window, documented as such.
 - **Time zones.** "Today" is always the calendar date in `Asia/Jerusalem`, on the server and in SQL, so alerts do not flip at the wrong hour.
 - **Tests**: 154 Vitest tests (alert logic, date handling, zod schemas, forms, modals, tire diagram, accessibility) and 150+ SQL assertions that run the real migrations on PGlite, including cross-group access attempts. All of it runs in CI on every PR.
-- **Performance and region migration.** The database originally lived in Seoul, far from the Vercel functions and the Israeli users, so every page paid for several slow round trips (one Auth call plus 2-3 queries). Moving Supabase to Frankfurt (`eu-central-1`) and pinning the functions to `fra1` fixed most of it; verifying the JWT locally, fetching membership in a single query and running page queries in parallel trimmed the rest. Client JS per route is tracked with `scripts/route-js-size.mjs`.
+- **Performance and region migration.** Moved the database from Seoul to Frankfurt (`eu-central-1`) and pinned functions to `fra1` to reduce latency for Israeli users. Verifying the JWT locally, fetching membership in a single query and running page queries in parallel trimmed it further. Client JS per route is tracked with `scripts/route-js-size.mjs`.
 - **Security headers**, strict `next` redirect sanitizing (no open redirects) and server-side filtering of every vehicle/photo action by group, in addition to RLS.
 
 ## Run it locally
