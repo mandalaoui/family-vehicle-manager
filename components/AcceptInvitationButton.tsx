@@ -23,7 +23,7 @@ export function AcceptInvitationButton({ token }: { token: string }) {
         return;
       }
       toast("הצטרפתם למשפחה. ברוכים הבאים!");
-      router.replace("/");
+      router.replace("/home");
       router.refresh();
     });
   }

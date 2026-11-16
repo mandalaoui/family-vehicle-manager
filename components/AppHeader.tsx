@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Car, Check, LogOut, Menu, Settings, Wrench, X } from "lucide-react";
 
 const TABS = [
-  { href: "/", label: "רכבים", icon: Car, match: (p: string) => p === "/" || p.startsWith("/vehicles") },
+  { href: "/home", label: "רכבים", icon: Car, match: (p: string) => p === "/home" || p.startsWith("/vehicles") },
   { href: "/garages", label: "מוסכים", icon: Wrench, match: (p: string) => p.startsWith("/garages") },
   { href: "/settings", label: "הגדרות", icon: Settings, match: (p: string) => p.startsWith("/settings") },
 ];
@@ -59,7 +59,7 @@ export function AppHeader({ familyName }: { familyName: string }) {
   return (
     <header ref={headerRef} className="sticky top-0 z-20 border-b border-silver-300 bg-white">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-        <Link href="/" className="flex min-h-[44px] min-w-0 items-center gap-3 rounded-xl text-start">
+        <Link href="/home" className="flex min-h-[44px] min-w-0 items-center gap-3 rounded-xl text-start">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand text-white">
             <Car size={22} aria-hidden />
           </span>

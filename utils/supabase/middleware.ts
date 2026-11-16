@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { getSupabaseEnv } from "./env";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/privacy", "/terms"];
+const PUBLIC_PATHS = ["/", "/login", "/auth/callback", "/privacy", "/terms"];
 
-function isPublic(pathname: string) {
+export function isPublic(pathname: string) {
   return (
     PUBLIC_PATHS.includes(pathname) ||
     // Cron has no session cookie; the route itself requires REMINDERS_ENABLED and a bearer secret.

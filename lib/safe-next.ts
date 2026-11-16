@@ -1,6 +1,6 @@
 // Only same-site relative paths are allowed as post-login destinations.
 // Blocks "//host", "/\host", absolute URLs and control characters.
-export function safeNext(value: string | null | undefined, fallback = "/"): string {
+export function safeNext(value: string | null | undefined, fallback = "/home"): string {
   if (!value || typeof value !== "string") return fallback;
   if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return fallback;
   if (value.includes("\\") || /[\u0000-\u001f\u007f]/.test(value)) return fallback;

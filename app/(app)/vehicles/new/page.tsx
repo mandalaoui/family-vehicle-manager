@@ -18,7 +18,7 @@ export default async function NewVehiclePage() {
           כדי להוסיף רכב, בקשו ממנהל המשפחה.
         </EmptyState>
         <div className="mt-4 flex justify-center">
-          <LinkButton href="/" variant="neutral">
+          <LinkButton href="/home" variant="neutral">
             חזרה לרכבים
           </LinkButton>
         </div>
@@ -28,7 +28,7 @@ export default async function NewVehiclePage() {
 
   return (
     <>
-      <ScreenHeader title="הוספת רכב" subtitle="הזינו את פרטי הרכב. אפשר לעדכן אותם בכל שלב." backHref="/" />
+      <ScreenHeader title="הוספת רכב" subtitle="הזינו את פרטי הרכב. אפשר לעדכן אותם בכל שלב." backHref="/home" />
       <VehicleForm familyId={familyId} />
     </>
   );

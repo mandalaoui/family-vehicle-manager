@@ -155,7 +155,7 @@ export function VehicleForm({ vehicle, familyId, photoUrl, hasLogs = false }: { 
     setF((p) => ({ ...p, ...patch }));
     clearErrors(...Object.keys(patch));
   }
-  const cancelHref = vehicle ? `/vehicles/${vehicle.id}` : "/";
+  const cancelHref = vehicle ? `/vehicles/${vehicle.id}` : "/home";
 
   function submit(e: React.FormEvent) {
     e.preventDefault();

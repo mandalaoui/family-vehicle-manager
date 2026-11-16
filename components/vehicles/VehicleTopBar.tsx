@@ -89,7 +89,7 @@ export function VehicleTopBar({
         return;
       }
       toast(`״${v.name}״ נמחק.`);
-      router.replace("/");
+      router.replace("/home");
       router.refresh();
     });
   }
@@ -106,7 +106,7 @@ export function VehicleTopBar({
 
   return (
     <>
-      <ScreenHeader title={v.name} subtitle={subtitle} backHref="/">
+      <ScreenHeader title={v.name} subtitle={subtitle} backHref="/home">
         <Button icon={Wrench} onClick={() => setModal("service")} disabled={pending}>
           בוצע טיפול
         </Button>

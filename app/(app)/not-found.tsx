@@ -9,7 +9,7 @@ export default function NotFound() {
         ייתכן שהרכב נמחק, או שאין לכם גישה אליו.
       </EmptyState>
       <div className="mt-4 flex justify-center">
-        <LinkButton href="/" variant="neutral">
+        <LinkButton href="/home" variant="neutral">
           חזרה לרכבים
         </LinkButton>
       </div>
