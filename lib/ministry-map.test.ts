@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanMake, mapColor, mapFuel, mapMinistryRecord } from "./ministry-map";
+import { cleanMake, mapFuel, mapMinistryRecord } from "./ministry-map";
 
 // A real record from the data.gov.il vehicle dataset (field names verified against the live API).
 const sample = {
