@@ -47,25 +47,41 @@ export function cleanMake(raw: string | null | undefined): string {
   return words.join(" ");
 }
 
+// One rule per color word. The text is split into words and the FIRST word that matches any rule decides,
+// so "אדום שחור" is red and "כסוף כהה" is silver. Words that match nothing (finish or shade words such as
+// "מטלי", "כהה", "פנינה") are skipped. "שן פיל" is two words, so it is joined before splitting.
 const COLOR_RULES: [RegExp, string][] = [
   [/לבן|שנהב/, "לבן"],
   [/שחור/, "שחור"],
   [/כסוף|כסף/, "כסוף"],
   [/אפור|פחם|גרפיט|טיטניום/, "אפור"],
-  [/כחול|תכלת|נייבי/, "כחול"],
-  [/אדום|בורדו|ורוד/, "אדום"],
+  [/תכלת/, "תכלת"],
+  [/כחול|נייבי/, "כחול"],
+  [/בורדו/, "בורדו"],
+  [/ורוד/, "ורוד"],
+  [/אדום/, "אדום"],
   [/ירוק|זית/, "ירוק"],
   [/צהוב|חרדל/, "צהוב"],
-  [/חום|קפה|שוקולד|ברונזה|בז/, "חום"],
+  [/^בז/, "בז'"],
+  [/^שן_פיל$/, "שן פיל"],
+  [/^קרם/, "קרם"],
+  [/חום|קפה|שוקולד|ברונזה/, "חום"],
   [/כתום|נחושת/, "כתום"],
   [/זהב|שמפניה/, "זהב"],
   [/סגול/, "סגול"],
+  [/טורקיז/, "טורקיז"],
 ];
 
 export function mapColor(raw: string | null | undefined): string | null {
   const v = (raw ?? "").trim();
   if (!v) return null;
-  for (const [re, name] of COLOR_RULES) if (re.test(v)) return name;
+  const words = v
+    .replace(/שן\s*פיל/g, "שן_פיל")
+    .split(/[\s,./()\-־–"'׳]+/)
+    .filter(Boolean);
+  for (const word of words) {
+    for (const [re, name] of COLOR_RULES) if (re.test(word)) return name;
+  }
   return "אחר";
 }
 

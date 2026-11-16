@@ -88,7 +88,7 @@ export const FUEL_LABELS = {
   electric: "חשמלי",
 } as const;
 
-export const COLORS = ["לבן", "שחור", "כסוף", "אפור", "כחול", "אדום", "ירוק", "צהוב", "חום", "כתום", "זהב", "סגול", "אחר"] as const;
+export const COLORS = ["לבן", "שחור", "כסוף", "אפור", "כחול", "אדום", "ירוק", "צהוב", "חום", "כתום", "זהב", "סגול", "תכלת", "ורוד", "בורדו", "טורקיז", "בז'", "קרם", "שן פיל", "אחר"] as const;
 
 export const COLOR_HEX: Record<string, string> = {
   לבן: "#f8fafc",
@@ -103,6 +103,13 @@ export const COLOR_HEX: Record<string, string> = {
   כתום: "#f97316",
   זהב: "#d4a72c",
   סגול: "#8b5cf6",
+  תכלת: "#7dd3fc",
+  ורוד: "#f9a8d4",
+  בורדו: "#9f1239",
+  טורקיז: "#14b8a6",
+  "בז'": "#e7d8b8",
+  קרם: "#fff0b8",
+  "שן פיל": "#f1ebdc",
   אחר: "#a8a29e",
 };
 
